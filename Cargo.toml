@@ -1,0 +1,34 @@
+# Untrace desktop shell. Consumes the `lethe` engine via path deps, so clone both
+# repos side by side (dev-loop: avoids publish-bumping while traits churn).
+#
+# INVARIANT: nothing here is imported by lethe/* — dependencies flow one way.
+
+[workspace]
+resolver = "2"
+members = [
+    "src-tauri",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+repository = "https://github.com/ForeverInLaw/untrace"
+
+[workspace.dependencies]
+# --- lethe (public engine, path dep during dev) ---
+lethe-adapter = { path = "../lethe/crates/lethe-adapter" }
+lethe-net = { path = "../lethe/crates/lethe-net" }
+lethe-core = { path = "../lethe/crates/lethe-core" }
+lethe-store = { path = "../lethe/crates/lethe-store" }
+lethe-crypto = { path = "../lethe/crates/lethe-crypto" }
+lethe-bluesky = { path = "../lethe/crates/adapters/bluesky" }
+lethe-telegram = { path = "../lethe/crates/adapters/telegram", default-features = false }
+# --- shared ---
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+async-trait = "0.1"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }

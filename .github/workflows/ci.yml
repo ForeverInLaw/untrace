@@ -1,0 +1,54 @@
+name: CI
+on:
+  push:
+    branches: [master]
+    paths-ignore: ["**.md", "LICENSE"]
+  pull_request:
+    paths-ignore: ["**.md", "LICENSE"]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: untrace
+    steps:
+      # Path dependencies expect lethe beside untrace.
+      - uses: actions/checkout@v4
+        with:
+          path: untrace
+      - uses: actions/checkout@v4
+        with:
+          repository: ForeverInLaw/lethe
+          path: lethe
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-dev libsoup-3.0-dev librsvg2-dev libayatana-appindicator3-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: untrace/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: untrace
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Test workspace
+        run: cargo test --workspace --locked
+      - name: Check Telegram bridge
+        run: cargo check -p untrace --features telegram-tdlib-docs --locked
