@@ -4,6 +4,7 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 export type ProgressEvent =
   | { event: "enumerating"; data: { seen: number } }
   | { event: "preview_ready"; data: { pending: number; protected: number } }
+  | { event: "archiving"; data: { done_bytes: number; total_bytes: number } }
   | { event: "deleting"; data: { deleted: number; skipped: number; failed: number; total: number } }
   | { event: "throttled"; data: { rate_per_sec: number; wait_secs: number } }
   | { event: "done"; data: { run_id: string } }
@@ -132,11 +133,14 @@ export interface VerifyBackupRequest extends StartRunRequest {}
 
 export interface BackupVerification {
   ok: boolean;
-  chunks: number;
+  items: number;
+  media_files: number;
 }
 
 export interface PreviewSummary extends PreviewCounts {
   types: { content_type: ContentType; count: number }[];
+  /// Bytes: the media going into the backup, what that takes on disk, what is free.
+  backup_space: { media: number; needed: number; available: number; fits: boolean };
 }
 
 export interface PreviewItem {

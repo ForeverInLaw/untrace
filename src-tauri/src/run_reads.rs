@@ -7,6 +7,7 @@ use lethe_store::{ItemQuery, StoredReceipt};
 use serde::Serialize;
 use tauri::State;
 
+use crate::backup::{self, BackupSpace};
 use crate::session::{self, StoredSession};
 use crate::{AppState, CommandError};
 
@@ -21,6 +22,7 @@ pub struct PreviewSummary {
     pending: u64,
     protected: u64,
     types: Vec<TypeCount>,
+    backup_space: BackupSpace,
 }
 
 #[derive(Serialize)]
@@ -66,10 +68,12 @@ pub async fn preview_summary(
             count,
         })
         .collect();
+    let backup_space = backup::backup_space(&state.backup_dir, &store.pending_media(&run_id)?)?;
     Ok(PreviewSummary {
         pending: counts.pending,
         protected: counts.protected,
         types,
+        backup_space,
     })
 }
 

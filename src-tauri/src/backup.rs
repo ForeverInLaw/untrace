@@ -1,9 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use lethe_core::archive::audit_archive;
 use lethe_core::pipeline::BackupTarget;
 use lethe_crypto::container::{derive_data_key, ContainerReader, ContainerWriter};
 use lethe_crypto::DataKey;
+use lethe_store::PendingMedia;
 use serde::{Deserialize, Serialize};
 
 use crate::secrets::{hex_encode, keychain_data_key, BACKUP_KEY_USER};
@@ -15,7 +17,31 @@ const BACKUP_KEY_META_EXT: &str = "key.json";
 #[derive(Debug, Serialize)]
 pub struct BackupVerification {
     pub ok: bool,
-    pub chunks: u64,
+    pub items: u64,
+    pub media_files: u64,
+}
+
+/// Whether the disk can hold a run's backup, in bytes.
+#[derive(Debug, Serialize)]
+pub struct BackupSpace {
+    pub media: u64,
+    pub needed: u64,
+    pub available: u64,
+    pub fits: bool,
+}
+
+impl BackupSpace {
+    /// The archive grows to the size of all files, and the file being downloaded
+    /// sits next to it in plaintext until it is archived.
+    fn new(media: &PendingMedia, available: u64) -> Self {
+        let needed = media.bytes + media.largest_bytes;
+        Self {
+            media: media.bytes,
+            needed,
+            available,
+            fits: needed <= available,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -25,6 +51,10 @@ struct BackupKeySidecar {
     kdf: String,
     salt_hex: String,
     wrapped_key_file: String,
+}
+
+pub fn backup_space(base_dir: &Path, media: &PendingMedia) -> Result<BackupSpace, CommandError> {
+    Ok(BackupSpace::new(media, fs4::available_space(base_dir)?))
 }
 
 pub fn backup_path(base_dir: &Path, run_id: &str) -> PathBuf {
@@ -62,15 +92,12 @@ pub fn verify_backup(
                 e.into()
             }
         })?;
-    let mut reader = ContainerReader::open(file, &key)?;
-    let mut chunks = 0;
-    while reader.read_chunk()?.is_some() {
-        chunks += 1;
-    }
-    if chunks == 0 {
-        return Err(CommandError::msg("backup archive contains no chunks"));
-    }
-    Ok(BackupVerification { ok: true, chunks })
+    let audit = audit_archive(file, &key)?;
+    Ok(BackupVerification {
+        ok: true,
+        items: audit.items,
+        media_files: audit.media_files,
+    })
 }
 
 fn backup_data_key() -> Result<DataKey, CommandError> {
@@ -174,7 +201,18 @@ mod tests {
     use lethe_crypto::container::ContainerWriter;
 
     #[test]
-    fn passphrase_backup_roundtrip_verifies_chunks() {
+    fn needed_space_covers_the_archive_and_the_file_being_downloaded() {
+        let media = PendingMedia {
+            bytes: 1_000,
+            largest_bytes: 700,
+        };
+
+        assert!(BackupSpace::new(&media, 1_700).fits);
+        assert!(!BackupSpace::new(&media, 1_699).fits);
+    }
+
+    #[test]
+    fn passphrase_backup_roundtrip_verifies_items() {
         let dir = std::env::temp_dir().join(format!(
             "untrace-backup-test-{}",
             std::time::SystemTime::now()
@@ -188,11 +226,16 @@ mod tests {
         let mut writer =
             ContainerWriter::create(fs::File::create(&target.path).unwrap(), &target.key).unwrap();
         writer.write_chunk(br#"{"manifest":true}"#).unwrap();
+        writer
+            .write_chunk(br#"{"media":[{"archived_bytes":3,"chunks":1}]}"#)
+            .unwrap();
+        writer.write_chunk(b"abc").unwrap();
         writer.finish().unwrap();
 
         let ok = verify_backup(&dir, "r1", Some("correct horse")).unwrap();
         assert!(ok.ok);
-        assert_eq!(ok.chunks, 1);
+        assert_eq!(ok.items, 1);
+        assert_eq!(ok.media_files, 1);
         assert!(verify_backup(&dir, "r1", Some("wrong horse")).is_err());
 
         fs::remove_dir_all(dir).ok();

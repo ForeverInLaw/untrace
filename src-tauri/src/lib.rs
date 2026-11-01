@@ -337,6 +337,10 @@ pub(crate) async fn execute_previewed_run(
             .as_deref()
             .filter(|passphrase| !passphrase.is_empty()),
     )?;
+    let media = state.reader.lock().await.pending_media(&run_id)?;
+    if !backup::backup_space(&state.backup_dir, &media)?.fits {
+        return Err(CommandError::msg("not enough free disk space for the backup"));
+    }
 
     let control = RunControl::new();
     state

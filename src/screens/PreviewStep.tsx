@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
-import { MediaBackupWarning } from "../components/MediaBackupWarning";
 import { Button, Checkbox, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
@@ -117,7 +116,6 @@ export function PreviewStep() {
       lead={t("preview.stays", { protected: protectedCount })}
       note={t("preview.limit")}
     >
-      <MediaBackupWarning />
       <fieldset aria-label={t("preview.filterLabel")} className="chips">
         <button aria-pressed={filter.kind === "all"} className="chip" onClick={() => setFilter({ kind: "all" })} type="button">
           {t("preview.all")} <span>{count(pending)}</span>

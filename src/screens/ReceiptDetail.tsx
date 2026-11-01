@@ -79,7 +79,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   const { summary, signature_hex: signature } = receipt;
   const platform = platforms.find((item) => item.id === summary.platform)?.display_name ?? summary.platform;
   const backupLine = verify.data?.ok
-    ? <span className="fact-safe">{t("receipt.backupOk", { chunks: verify.data.chunks })}</span>
+    ? <span className="fact-safe">{t("receipt.backupOk", { items: verify.data.items, files: verify.data.media_files })}</span>
     : verifyFailed
       ? <span className="fact-fault">{t("receipt.backupBad")}</span>
       : t("receipt.backupUnchecked");

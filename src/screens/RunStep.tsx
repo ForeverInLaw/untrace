@@ -4,6 +4,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { Seal } from "../components/Seal";
 import { Button, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
+import { useByteFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
 import { usePauseRunMutation, useResumeRunMutation, useStopRunMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
@@ -33,6 +34,18 @@ function Counters() {
       ))}
     </dl>
   );
+}
+
+/// Large files take a while to download, so this keeps a long batch from looking stuck.
+function ArchiveProgress() {
+  const { t } = useTranslation();
+  const formatBytes = useByteFormat();
+  const done = useRunStore((s) => s.archivedBytes);
+  const total = useRunStore((s) => s.archiveTotalBytes);
+  if (total === 0 || done >= total) {
+    return null;
+  }
+  return <p className="help">{t("run.archiving", { done: formatBytes(done), total: formatBytes(total) })}</p>;
 }
 
 function RunHeading() {
@@ -116,6 +129,7 @@ export function RunStep() {
     >
       <progress aria-label={t("run.progressLabel")} className="meter" max={Math.max(total, 1)} value={handled} />
       <Counters />
+      <ArchiveProgress />
       {waitSecs !== null && (
         <Notice icon={<Clock aria-hidden="true" size={16} />} tone="caution">
           {t("run.throttled", { platform, seconds: waitSecs })}
