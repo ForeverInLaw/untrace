@@ -8,5 +8,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Cargo artifacts are locked mid-build, and watching them crashes Vite on Windows.
+    watch: { ignored: ["**/target/**", "**/src-tauri/**"] },
   },
 });
