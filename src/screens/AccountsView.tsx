@@ -11,15 +11,18 @@ export function AccountsView() {
   const disconnect = useDisconnectAccountMutation();
   const platforms = usePlatformsQuery().data ?? [];
   const startOver = useFlowStore((s) => s.startOver);
+  // Starting over would drop the screen of a deletion that keeps running.
+  const running = useFlowStore((s) => s.step === "run");
   const rows = accounts.data ?? [];
 
   return (
     <Screen
-      actions={<Button kind="primary" onClick={startOver}>{t("accounts.add")}</Button>}
+      actions={<Button disabled={running} kind="primary" onClick={startOver}>{t("accounts.add")}</Button>}
       heading={t("accounts.heading")}
       lead={t("accounts.lead")}
     >
       {accounts.isSuccess && rows.length === 0 && <p className="empty">{t("accounts.empty")}</p>}
+      {accounts.isError && <Notice tone="fault">{errorMessage(accounts.error)}</Notice>}
       <ul className="account-list">
         {rows.map((account) => (
           <li className="account-row" key={`${account.platform}:${account.label}`}>

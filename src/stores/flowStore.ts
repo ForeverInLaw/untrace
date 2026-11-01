@@ -67,7 +67,13 @@ export const useFlowStore = create<FlowState>((set) => ({
   view: "cleanup",
   openReceiptId: null,
   ...initialCleanup,
-  openView: (view) => set({ view, openReceiptId: null }),
+  // Coming back to an unfinished cleanup keeps it; a finished one has nothing left to return to.
+  openView: (view) =>
+    set((state) => ({
+      ...(view === "cleanup" && state.step === "receipt" ? initialCleanup : {}),
+      view,
+      openReceiptId: null,
+    })),
   openReceipt: (openReceiptId) => set({ view: "receipts", openReceiptId }),
   goTo: (step) => set({ step, view: "cleanup" }),
   selectPlatform: (platformId) => set({ platformId, account: null, draft: initialDraft, chatIds: [], runId: null }),
