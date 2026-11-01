@@ -294,7 +294,7 @@ small {
 
 .step-bar__list {
   display: flex;
-  gap: 18px;
+  gap: 30px;
   min-width: 0;
 }
 
@@ -302,8 +302,8 @@ small {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 5px;
   color: var(--soot);
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -313,25 +313,22 @@ small {
 
 .step[aria-current="step"] {
   color: var(--ink);
-  font-weight: 600;
 }
 
 .step[aria-current="step"]::after {
   position: absolute;
   right: 0;
   bottom: -1px;
-  left: 19px;
+  left: 0;
   height: 2px;
   background: var(--ember);
   content: "";
 }
 
-.step__slot {
-  display: inline-flex;
-  width: 14px;
-}
-
+/* The check hangs in the gap, so labels keep their place on every step. */
 .step__check {
+  position: absolute;
+  left: -19px;
   color: var(--safe);
 }
 
@@ -340,6 +337,7 @@ small {
   border: 0;
   background: none;
   color: inherit;
+  font-weight: inherit;
 }
 
 .step__link:hover {
@@ -933,23 +931,31 @@ small {
 }
 
 .cell-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  position: relative;
   min-width: 0;
 }
 
 .cell-line__text {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Laid over the row's end, so the text never reflows under the pointer. */
 .hint {
-  flex-shrink: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding-left: 16px;
+  background: var(--coal);
   font-size: 13px;
   font-weight: 500;
+  line-height: 20px;
+}
+
+.row:hover .hint {
+  background: var(--raise);
 }
 
 .hint--protect {
@@ -1200,6 +1206,11 @@ small {
   gap: 16px;
 }
 
+.receipt__seal .seal {
+  width: clamp(170px, 25.5vw, 280px);
+  height: auto;
+}
+
 .receipt__seal figcaption {
   display: grid;
   gap: 2px;
@@ -1233,26 +1244,9 @@ small {
   color: var(--soot);
 }
 
-/* The receipt seal gives way first when the window is narrow. */
 @media (max-width: 1020px) {
   .receipt {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .receipt__seal {
-    display: none;
-  }
-
-  .step-bar__list {
-    gap: 14px;
-  }
-
-  .step__slot:empty {
-    display: none;
-  }
-
-  .step[aria-current="step"]::after {
-    left: 0;
+    gap: 24px;
   }
 
   .table .cell-meta {

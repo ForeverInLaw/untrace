@@ -22,9 +22,7 @@ export function StepBar() {
           const label = t(`steps.${name}`);
           return (
             <li aria-current={index === current ? "step" : undefined} className="step" key={name}>
-              <span className="step__slot">
-                {done && <Check aria-hidden="true" className="step__check" size={14} />}
-              </span>
+              {done && <Check aria-hidden="true" className="step__check" size={14} />}
               {done && current < FIRST_LOCKED_STEP ? (
                 <button className="step__link" onClick={() => goTo(name)} type="button">{label}</button>
               ) : (
