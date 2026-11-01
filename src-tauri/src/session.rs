@@ -8,6 +8,12 @@ use lethe_crypto::container::{ContainerReader, ContainerWriter};
 use crate::secrets::{hex_encode, keychain_data_key, SESSION_KEY_USER};
 use crate::CommandError;
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+pub struct StoredSession {
+    pub platform: String,
+    pub label: String,
+}
+
 pub fn save(
     session_dir: &Path,
     platform: &str,
@@ -43,6 +49,26 @@ pub fn load(
         .map_err(|e| CommandError::msg(format!("stored session is not UTF-8: {e}")))
 }
 
+/// Accounts with a stored session, sorted for a stable display order.
+pub fn list(session_dir: &Path) -> Result<Vec<StoredSession>, CommandError> {
+    let mut sessions: Vec<StoredSession> = fs::read_dir(session_dir)?
+        .filter_map(|entry| {
+            entry
+                .ok()?
+                .file_name()
+                .to_str()
+                .and_then(session_from_file_name)
+        })
+        .collect();
+    sessions.sort();
+    Ok(sessions)
+}
+
+pub fn remove(session_dir: &Path, platform: &str, account_label: &str) -> Result<(), CommandError> {
+    fs::remove_file(session_path(session_dir, platform, account_label))?;
+    Ok(())
+}
+
 fn session_data_key() -> Result<lethe_crypto::DataKey, CommandError> {
     keychain_data_key(SESSION_KEY_USER, "session key")
 }
@@ -52,10 +78,47 @@ fn session_path(session_dir: &Path, platform: &str, account_label: &str) -> Path
     session_dir.join(format!("{name}.bin"))
 }
 
+/// Inverse of `session_path`'s file name; anything else in the folder is ignored.
+fn session_from_file_name(name: &str) -> Option<StoredSession> {
+    let hex = name.strip_suffix(".bin")?;
+    if !hex.len().is_multiple_of(2) || !hex.is_ascii() {
+        return None;
+    }
+    let bytes = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+        .collect::<Option<Vec<u8>>>()?;
+    let decoded = String::from_utf8(bytes).ok()?;
+    let (platform, label) = decoded.split_once(':')?;
+    Some(StoredSession {
+        platform: platform.to_owned(),
+        label: label.to_owned(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::session_path;
+    use super::{session_from_file_name, session_path, StoredSession};
     use std::path::Path;
+
+    #[test]
+    fn session_file_name_decodes_back_to_its_account() {
+        let path = session_path(Path::new("sessions"), "bluesky", "mara:x.bsky.social");
+        let name = path.file_name().unwrap().to_str().unwrap();
+        assert_eq!(
+            session_from_file_name(name),
+            Some(StoredSession {
+                platform: "bluesky".into(),
+                label: "mara:x.bsky.social".into()
+            })
+        );
+    }
+
+    #[test]
+    fn unrelated_files_are_not_sessions() {
+        assert_eq!(session_from_file_name("notes.txt"), None);
+        assert_eq!(session_from_file_name("zz.bin"), None);
+    }
 
     #[test]
     fn session_file_name_is_path_safe() {
