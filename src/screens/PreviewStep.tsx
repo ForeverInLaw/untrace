@@ -95,7 +95,8 @@ export function PreviewStep() {
   const runId = useFlowStore((s) => s.runId) ?? "";
   const goTo = useFlowStore((s) => s.goTo);
   const [filter, setFilter] = useState<Filter>({ kind: "all" });
-  const summary = usePreviewSummaryQuery(runId).data;
+  const summaryQuery = usePreviewSummaryQuery(runId);
+  const summary = summaryQuery.data;
   const saving = useIsSavingProtection(runId);
   const pending = summary?.pending ?? 0;
   const protectedCount = summary?.protected ?? 0;
@@ -116,6 +117,7 @@ export function PreviewStep() {
       lead={t("preview.stays", { protected: protectedCount })}
       note={t("preview.limit")}
     >
+      {summaryQuery.isError && <Notice tone="fault">{errorMessage(summaryQuery.error)}</Notice>}
       <fieldset aria-label={t("preview.filterLabel")} className="chips">
         <button aria-pressed={filter.kind === "all"} className="chip" onClick={() => setFilter({ kind: "all" })} type="button">
           {t("preview.all")} <span>{count(pending)}</span>

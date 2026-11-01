@@ -31,13 +31,14 @@ export function BackupStep() {
   const goTo = useFlowStore((s) => s.goTo);
   const apply = useRunStore((s) => s.apply);
   const [confirmed, setConfirmed] = useState(false);
-  const summary = usePreviewSummaryQuery(runId).data;
+  const summaryQuery = usePreviewSummaryQuery(runId);
+  const summary = summaryQuery.data;
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId)?.display_name ?? platformId;
   const start = useStartRunMutation(platformId, apply);
   const period = usePeriodLabel();
   const pending = summary?.pending ?? 0;
   const types = summary?.types.map(({ content_type: type }) => t(`contentType.${type}`).toLowerCase()).join(", ");
-  const error = errorMessage(start.error);
+  const error = errorMessage(start.error ?? summaryQuery.error);
   const formatBytes = useByteFormat();
   const space = summary?.backup_space;
 
