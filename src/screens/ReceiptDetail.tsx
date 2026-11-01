@@ -31,7 +31,8 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   const flowPassphrase = useFlowStore((s) => s.passphrase);
   const runFailure = useRunStore((s) => s.message);
   const [passphrase, setPassphrase] = useState(flowPassphrase);
-  const receipt = useReceiptQuery(runId).data;
+  const receiptQuery = useReceiptQuery(runId);
+  const receipt = receiptQuery.data;
   const receipts = useReceiptsQuery().data ?? [];
   const platforms = usePlatformsQuery().data ?? [];
   const verify = useVerifyBackupMutation();
@@ -67,9 +68,10 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   );
 
   if (!receipt) {
+    const failure = errorMessage(receiptQuery.error) ?? runFailure;
     return (
-      <Screen actions={actions} heading={t("receipt.waiting")}>
-        {runFailure && <Notice tone="fault">{runFailure}</Notice>}
+      <Screen actions={actions} heading={t(receiptQuery.isError ? "receipt.loadFailed" : "receipt.waiting")}>
+        {failure && <Notice tone="fault">{failure}</Notice>}
       </Screen>
     );
   }

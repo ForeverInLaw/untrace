@@ -92,6 +92,7 @@ export const en = {
   "chats.kind.secret": "Secret",
   "chats.unsupported": "Not supported",
   "chats.selected": "Chats selected: {{chats}}, your messages: {{messages, number}}.",
+  "chats.selectedUnknown": "Chats selected: {{chats}}. The next step shows exactly how many of your messages they hold.",
   "chats.noneSelected": "Pick at least one chat.",
 
   "preview.heading_one": "<n>{{count, number}}</n> item will be deleted",
@@ -105,6 +106,7 @@ export const en = {
   "preview.date": "Date",
   "preview.protect": "Protect",
   "preview.stay": "Stays",
+  "preview.protectFailed": "Not saved",
   "preview.noText": "No text",
   "preview.toggleRow": "Delete this item",
   "preview.more": "Show more",
@@ -156,6 +158,7 @@ export const en = {
   "receipt.heading_one": "Done: <n>{{count, number}}</n> item deleted",
   "receipt.heading_other": "Done: <n>{{count, number}}</n> items deleted",
   "receipt.waiting": "Signing the receipt…",
+  "receipt.loadFailed": "Could not open the receipt",
   "receipt.failedLine_one": "{{count, number}} item couldn't be deleted and remains on the platform.",
   "receipt.failedLine_other": "{{count, number}} items couldn't be deleted and remain on the platform.",
   "receipt.account": "Account",

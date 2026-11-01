@@ -94,6 +94,7 @@ export const ru = {
   "chats.kind.secret": "Секретный",
   "chats.unsupported": "Не поддерживается",
   "chats.selected": "Выбрано чатов: {{chats}}, ваших сообщений: {{messages, number}}.",
+  "chats.selectedUnknown": "Выбрано чатов: {{chats}}. Точное число ваших сообщений покажет следующий шаг.",
   "chats.noneSelected": "Выберите хотя бы один чат.",
 
   "preview.heading_one": "<n>{{count, number}}</n> запись будет удалена",
@@ -109,6 +110,7 @@ export const ru = {
   "preview.date": "Дата",
   "preview.protect": "Защитить",
   "preview.stay": "Останется",
+  "preview.protectFailed": "Не сохранилось",
   "preview.noText": "Без текста",
   "preview.toggleRow": "Удалить эту запись",
   "preview.more": "Показать ещё",
@@ -168,6 +170,7 @@ export const ru = {
   "receipt.heading_many": "Готово: удалено <n>{{count, number}}</n> записей",
   "receipt.heading_other": "Готово: удалено <n>{{count, number}}</n> записи",
   "receipt.waiting": "Подписываем квитанцию…",
+  "receipt.loadFailed": "Не удалось открыть квитанцию",
   "receipt.failedLine_one": "{{count, number}} запись удалить не удалось, она осталась на платформе.",
   "receipt.failedLine_few": "{{count, number}} записи удалить не удалось, они остались на платформе.",
   "receipt.failedLine_many": "{{count, number}} записей удалить не удалось, они остались на платформе.",

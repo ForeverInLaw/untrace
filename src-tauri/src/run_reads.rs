@@ -79,8 +79,8 @@ pub async fn preview_items(
     run_id: String,
     protected_only: bool,
     content_type: Option<ContentType>,
-    offset: u64,
-    limit: u64,
+    offset: u32,
+    limit: u32,
 ) -> Result<Vec<PreviewItem>, CommandError> {
     let store = state.reader.lock().await;
     let rows = store.preview_items(

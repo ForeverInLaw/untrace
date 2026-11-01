@@ -191,9 +191,13 @@ function TelegramScope() {
   const onReady = usePreviewReady();
   const counts = ownCounts.data ?? {};
   const visible = chats.filter((chat) => chat.id in counts && counts[chat.id] !== 0);
-  const messages = chatIds.reduce((sum, id) => sum + (counts[id] ?? 0), 0);
+  const knownCounts = chatIds.map((id) => counts[id]).filter((count) => typeof count === "number");
+  const messages = knownCounts.reduce((sum, count) => sum + count, 0);
   const filter = toFilterRequest(draft, available);
-  const error = errorMessage(dryRun.error) ?? (status.data?.blocker || null);
+  const error = errorMessage(dryRun.error ?? status.error) ?? (status.data?.blocker || null);
+  const selectionNote = knownCounts.length === chatIds.length
+    ? t("chats.selected", { chats: chatIds.length, messages })
+    : t("chats.selectedUnknown", { chats: chatIds.length });
 
   const onCheck = async () => {
     onReady(await dryRun.mutateAsync({ chat_ids: chatIds, filter }));
@@ -212,25 +216,21 @@ function TelegramScope() {
       }
       fill
       heading={t("chats.heading")}
-      note={
-        chatIds.length > 0
-          ? t("chats.selected", { chats: chatIds.length, messages })
-          : t("chats.noneSelected")
-      }
+      note={chatIds.length > 0 ? selectionNote : t("chats.noneSelected")}
     >
       <div className="chats-status">
         <p className="screen__lead">
-          {status.isPending
+          {!status.isError && (status.isPending
             ? t("chats.loading")
             : ownCounts.isFetching
               ? t("chats.progress", { checked: Object.keys(counts).length, total: chats.length })
-              : t("chats.done", { visible: visible.length, total: chats.length })}
+              : t("chats.done", { visible: visible.length, total: chats.length }))}
         </p>
         <button
           aria-label={t("chats.recheck")}
           className="icon-button"
-          disabled={ownCounts.isFetching}
-          onClick={() => ownCounts.refetch()}
+          disabled={status.isFetching || ownCounts.isFetching}
+          onClick={() => (status.isError ? status.refetch() : ownCounts.refetch())}
           title={t("chats.recheck")}
           type="button"
         >
@@ -261,7 +261,7 @@ function TelegramScope() {
             ))}
           </tbody>
         </table>
-        {!ownCounts.isFetching && !status.isPending && visible.length === 0 && (
+        {!ownCounts.isFetching && status.isSuccess && visible.length === 0 && (
           <p className="empty">{t("chats.empty")}</p>
         )}
       </div>

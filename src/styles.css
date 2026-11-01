@@ -972,6 +972,10 @@ small {
   color: var(--safe);
 }
 
+.hint--fault {
+  color: var(--fault);
+}
+
 .table .cell-meta {
   width: 130px;
   padding-left: 16px;

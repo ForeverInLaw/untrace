@@ -7,6 +7,7 @@ import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
 import type { ContentType, PreviewItem } from "../lib/tauri";
 import {
+  useIsSavingProtection,
   usePreviewItemsQuery,
   usePreviewSummaryQuery,
   useSetItemProtectedMutation,
@@ -34,7 +35,9 @@ function ItemRow({ item, runId }: { item: PreviewItem; runId: string }) {
       <td title={item.text ?? undefined}>
         <div className="cell-line">
           <span className="cell-line__text">{item.text ?? t("preview.noText")}</span>
-          {item.protected ? (
+          {protect.isError ? (
+            <span className="hint hint--fault" role="alert">{t("preview.protectFailed")}</span>
+          ) : item.protected ? (
             <span className="hint hint--stays">{t("preview.stay")}</span>
           ) : (
             <span className="hint hint--protect">{t("preview.protect")}</span>
@@ -94,6 +97,7 @@ export function PreviewStep() {
   const goTo = useFlowStore((s) => s.goTo);
   const [filter, setFilter] = useState<Filter>({ kind: "all" });
   const summary = usePreviewSummaryQuery(runId).data;
+  const saving = useIsSavingProtection(runId);
   const pending = summary?.pending ?? 0;
   const protectedCount = summary?.protected ?? 0;
   const count = (value: number) => t("cleanup.plainNumber", { value });
@@ -103,7 +107,7 @@ export function PreviewStep() {
       actions={
         <>
           <Button onClick={() => goTo("scope")}>{t("preview.editScope")}</Button>
-          <Button disabled={pending === 0} kind="primary" onClick={() => goTo("backup")}>
+          <Button disabled={pending === 0 || saving} kind="primary" onClick={() => goTo("backup")}>
             {t("preview.next")}
           </Button>
         </>

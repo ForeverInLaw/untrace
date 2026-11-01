@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   type BuildRunRequest,
@@ -53,14 +53,23 @@ export function usePreviewItemsQuery(runId: string, protectedOnly: boolean, cont
   });
 }
 
+function protectMutationKey(runId: string) {
+  return ["preview", runId, "protect"];
+}
+
 export function useSetItemProtectedMutation(runId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationKey: ["preview", runId, "protect"],
+    mutationKey: protectMutationKey(runId),
     mutationFn: ({ platformId, isProtected }: { platformId: string; isProtected: boolean }) =>
       api.setItemProtected(runId, platformId, isProtected),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["preview", runId] }),
   });
+}
+
+/// True from a click on a row until the choice is stored and the counts are fresh.
+export function useIsSavingProtection(runId: string) {
+  return useIsMutating({ mutationKey: protectMutationKey(runId) }) > 0;
 }
 
 export function useReceiptsQuery() {
@@ -68,12 +77,12 @@ export function useReceiptsQuery() {
 }
 
 /// The engine reports `done` just before it stores the receipt, so keep asking
-/// until the receipt is there.
+/// until the receipt is there or reading it fails.
 export function useReceiptQuery(runId: string) {
   return useQuery({
     queryKey: ["receipts", runId],
     queryFn: () => api.getReceipt(runId),
-    refetchInterval: (query) => (query.state.data ? false : RECEIPT_POLL_MS),
+    refetchInterval: (query) => (query.state.data || query.state.status === "error" ? false : RECEIPT_POLL_MS),
   });
 }
 

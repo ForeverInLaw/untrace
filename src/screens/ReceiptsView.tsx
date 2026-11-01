@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Seal } from "../components/Seal";
-import { Screen } from "../components/ui";
+import { Notice, Screen } from "../components/ui";
+import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
 import { useReceiptsQuery } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
@@ -27,6 +28,7 @@ export function ReceiptsView() {
   return (
     <Screen fill heading={t("receipts.heading")}>
       {receipts.isSuccess && rows.length === 0 && <p className="empty">{t("receipts.empty")}</p>}
+      {receipts.isError && <Notice tone="fault">{errorMessage(receipts.error)}</Notice>}
       {rows.length > 0 && (
         <div className="table-scroll">
           <table className="table">
