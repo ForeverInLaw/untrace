@@ -5,9 +5,8 @@ social networks and messengers. Credentials and backups stay on your device, and
 every run shows a dry-run preview, keeps an encrypted backup and ends with a signed
 receipt. The deletion engine lives in [Lethe](https://github.com/ForeverInLaw/lethe).
 
-The project is in early alpha. The Bluesky path is wired end to end, and a post goes
-into the backup with its text and files; that backup has not yet gone through a live
-cleanup. Telegram works behind feature flags and has passed live runs on a test group, with
+The project is in early alpha. The Bluesky path works end to end and has passed a live
+cleanup, with a post's text and files in the backup. Telegram works behind feature flags and has passed live runs on a test group, with
 media files in the backup; polls, locations and contacts back up without their
 content. The app lists only the services that work in the current build, in Russian
 or English.
