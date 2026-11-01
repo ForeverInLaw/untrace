@@ -6,8 +6,8 @@ import {
   type TelegramAuthCodeRequest,
   type TelegramAuthPasswordRequest,
   type TelegramAuthStartRequest,
+  type TelegramChatSummary,
   type TelegramDryRunRequest,
-  type TelegramPreviewRequest,
 } from "../lib/tauri";
 
 export function useTelegramScopeStatusQuery(enabled: boolean) {
@@ -15,6 +15,8 @@ export function useTelegramScopeStatusQuery(enabled: boolean) {
     enabled,
     queryKey: ["telegram", "scope-status"],
     queryFn: api.telegramScopeStatus,
+    // Listing loads every chat, too slow to repeat on each window focus.
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -45,10 +47,26 @@ export function useTelegramAuthPasswordMutation() {
   });
 }
 
-export function useTelegramPreviewChatsMutation() {
-  return useMutation({
-    mutationKey: ["telegram", "preview-chats"],
-    mutationFn: (req: TelegramPreviewRequest) => api.telegramPreviewChats(req),
+/// Own-message count per chat id; null when it could not be determined.
+export type OwnMessageCounts = Record<string, number | null>;
+
+/// Checks chats one at a time and publishes partial results, so the list fills in
+/// as the scan runs. TDLib can't search secret chats, so those stay unknown.
+export function useTelegramOwnMessageCountsQuery(chats: TelegramChatSummary[]) {
+  return useQuery<OwnMessageCounts>({
+    enabled: chats.length > 0,
+    queryKey: ["telegram", "own-message-counts", chats.map((chat) => chat.id).join()],
+    staleTime: Infinity,
+    queryFn: async ({ client, queryKey, signal }) => {
+      const counts: OwnMessageCounts = {};
+      for (const chat of chats) {
+        if (signal.aborted) break;
+        counts[chat.id] =
+          chat.kind === "secret" ? null : await api.telegramOwnMessageCount(chat.id).catch(() => null);
+        client.setQueryData<OwnMessageCounts>(queryKey, { ...counts });
+      }
+      return counts;
+    },
   });
 }
 

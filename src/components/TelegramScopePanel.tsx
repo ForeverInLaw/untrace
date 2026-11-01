@@ -1,11 +1,11 @@
 import { type FormEvent, useState } from "react";
-import { KeyRound, LockKeyhole, MessageCircle, OctagonAlert, Phone, Send, Users } from "lucide-react";
+import { KeyRound, LockKeyhole, MessageCircle, OctagonAlert, Phone, RefreshCw, Send, Users } from "lucide-react";
 import {
   useTelegramAuthCodeMutation,
   useTelegramAuthPasswordMutation,
   useTelegramAuthStartMutation,
   useTelegramDryRunChatsMutation,
-  useTelegramPreviewChatsMutation,
+  useTelegramOwnMessageCountsQuery,
   useTelegramScopeStatusQuery,
 } from "../queries/telegram";
 import { TelegramRunControls } from "./TelegramRunControls";
@@ -30,27 +30,29 @@ export function TelegramScopePanel({ active, filter }: TelegramScopePanelProps) 
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
+  const [onlyOwnChats, setOnlyOwnChats] = useState(true);
   const scopeStatus = useTelegramScopeStatusQuery(active);
   const authStart = useTelegramAuthStartMutation();
   const authCode = useTelegramAuthCodeMutation();
   const authPassword = useTelegramAuthPasswordMutation();
-  const previewChats = useTelegramPreviewChatsMutation();
   const dryRunChats = useTelegramDryRunChatsMutation();
   const rules = scopeStatus.data?.rules ?? [];
   const chats = scopeStatus.data?.chats ?? [];
+  const ownCounts = useTelegramOwnMessageCountsQuery(chats);
+  const counts = ownCounts.data ?? {};
+  const visibleChats = onlyOwnChats ? chats.filter((chat) => chat.id in counts && counts[chat.id] !== 0) : chats;
+  const selectedMessages = selectedChatIds.reduce((sum, id) => sum + (counts[id] ?? 0), 0);
   const auth = scopeStatus.data?.auth;
   const busy =
     authStart.isPending ||
     authCode.isPending ||
     authPassword.isPending ||
-    previewChats.isPending ||
     dryRunChats.isPending ||
     scopeStatus.isFetching;
   const canStart = apiId.trim().length > 0 && apiHash.trim().length > 0 && phoneNumber.trim().length > 0;
   const showCode = auth?.phase === "wait_code";
   const showPassword = auth?.phase === "wait_password";
   const blocker = scopeStatus.data?.blocker || auth?.message;
-  const preview = previewChats.data;
   const dryRun = dryRunChats.data;
   const canDryRunChats = selectedChatIds.length > 0 && filter.content_types.length > 0;
 
@@ -76,19 +78,14 @@ export function TelegramScopePanel({ active, filter }: TelegramScopePanelProps) 
   };
 
   const toggleChat = (chatId: string) => {
-    previewChats.reset();
     dryRunChats.reset();
     setSelectedChatIds((current) =>
       current.includes(chatId) ? current.filter((id) => id !== chatId) : [...current, chatId],
     );
   };
 
-  const onPreviewChats = async () => {
-    await previewChats.mutateAsync({ chat_ids: selectedChatIds, page_limit: 100 });
-  };
-
   const onDryRunChats = async () => {
-    await dryRunChats.mutateAsync({ chat_ids: selectedChatIds, page_limit: 100, filter });
+    await dryRunChats.mutateAsync({ chat_ids: selectedChatIds, filter });
   };
 
   return (
@@ -192,30 +189,52 @@ export function TelegramScopePanel({ active, filter }: TelegramScopePanelProps) 
       )}
 
       {chats.length > 0 && (
-        <div className="telegram-chat-list" aria-label="Telegram chats">
-          {chats.map((chat) => {
-            const Icon = scopeIcons[chat.kind];
-            return (
-              <article className="telegram-chat" key={chat.id}>
-                <input
-                  checked={selectedChatIds.includes(chat.id)}
-                  onChange={() => toggleChat(chat.id)}
-                  type="checkbox"
-                />
-                <Icon size={16} />
-                <strong>{chat.title || chat.id}</strong>
-                <span>{chat.cleanability}</span>
-              </article>
-            );
-          })}
-          <button
-            className="command"
-            disabled={busy || selectedChatIds.length === 0}
-            onClick={onPreviewChats}
-            type="button"
-          >
-            Preview selected
-          </button>
+        <>
+          <div className="telegram-chat-filter">
+            <label>
+              <input
+                checked={onlyOwnChats}
+                onChange={(event) => setOnlyOwnChats(event.target.checked)}
+                type="checkbox"
+              />
+              Only chats with my messages
+            </label>
+            <span aria-live="polite">
+              {ownCounts.isFetching
+                ? `Checked ${Object.keys(counts).length} of ${chats.length}`
+                : `${visibleChats.length} of ${chats.length} chats`}
+            </span>
+            <button
+              aria-label="Check chats again"
+              className="icon-command"
+              disabled={ownCounts.isFetching}
+              onClick={() => ownCounts.refetch()}
+              type="button"
+            >
+              <RefreshCw size={16} />
+            </button>
+          </div>
+          <div className="telegram-chat-list" aria-label="Telegram chats">
+            {visibleChats.map((chat) => {
+              const Icon = scopeIcons[chat.kind];
+              const count = counts[chat.id];
+              return (
+                <article className="telegram-chat" key={chat.id}>
+                  <input
+                    checked={selectedChatIds.includes(chat.id)}
+                    onChange={() => toggleChat(chat.id)}
+                    type="checkbox"
+                  />
+                  <Icon size={16} />
+                  <strong>{chat.title || chat.id}</strong>
+                  <span>{typeof count === "number" ? `${count} mine · ${chat.cleanability}` : chat.cleanability}</span>
+                </article>
+              );
+            })}
+            {visibleChats.length === 0 && !ownCounts.isFetching && (
+              <p className="telegram-chat-list__empty">No chats with your messages</p>
+            )}
+          </div>
           <button
             className="command command--primary"
             disabled={busy || !canDryRunChats}
@@ -225,12 +244,10 @@ export function TelegramScopePanel({ active, filter }: TelegramScopePanelProps) 
             <Send size={16} />
             Create dry run
           </button>
-          {preview && (
+          {selectedChatIds.length > 0 && !dryRun && (
             <div className="telegram-preview">
-              <strong>{preview.own_messages}</strong>
-              <span>
-                own messages in {preview.scanned_chats} chats, first {preview.page_limit} per chat
-              </span>
+              <strong>{selectedMessages}</strong>
+              <span>your messages in {selectedChatIds.length} selected chats</span>
             </div>
           )}
           {dryRun && (
@@ -244,7 +261,7 @@ export function TelegramScopePanel({ active, filter }: TelegramScopePanelProps) 
               <TelegramRunControls runId={dryRun.run_id} pending={dryRun.pending} />
             </>
           )}
-        </div>
+        </>
       )}
 
       {!scopeStatus.data?.available && chats.length === 0 && (

@@ -10,17 +10,18 @@ use lethe_adapter::{
 use lethe_core::pipeline::{self, RunRequest};
 use lethe_core::ProgressEvent;
 use lethe_store::NewRun;
-use lethe_telegram::tdlib_bridge::{
-    delete_message_batch, list_own_message_page, TdlibClientId, TelegramMessageKind,
-};
+use lethe_telegram::tdlib_bridge::{delete_message_batch, TdlibClientId, TelegramMessageKind};
 use lethe_telegram::{assemble_outcomes, parse_message_ref};
 use tauri::State;
 
-use super::{parse_chat_id, TelegramState};
+use super::{own_message_page, parse_chat_id, TelegramState};
 use crate::telegram::TelegramDryRunRequest;
 use crate::{
     now_secs, run_filters, run_offthread, AppState, CommandError, DryRunResult, PendingRun,
 };
+
+/// TDLib's upper bound for one search page.
+const SEARCH_PAGE: i32 = 100;
 
 pub async fn telegram_dry_run_chats(
     app: State<'_, AppState>,
@@ -33,10 +34,9 @@ pub async fn telegram_dry_run_chats(
         .iter()
         .map(|chat_id| parse_chat_id(chat_id))
         .collect::<Result<Vec<_>, _>>()?;
-    let page_limit = req.page_limit.unwrap_or(100).clamp(1, 100);
     let filter = run_filters::to_filter_spec(&req.filter)?;
     let filter_json = serde_json::to_string(&req.filter)?;
-    let adapter = snapshot_items_for_chats(client, current_user_id, &chat_ids, page_limit)
+    let adapter = snapshot_items_for_chats(client, current_user_id, &chat_ids)
         .await
         .map_err(|e| CommandError::msg(e.to_string()))?;
     let run_id = format!("telegram-{}", now_secs());
@@ -170,27 +170,44 @@ pub async fn snapshot_items_for_chats(
     client: TdlibClientId,
     current_user_id: i64,
     chat_ids: &[i64],
-    page_limit: i32,
 ) -> Result<Arc<dyn PlatformAdapter>, AdapterError> {
     let mut items = Vec::new();
     for chat_id in chat_ids {
-        let page = list_own_message_page(client, *chat_id, current_user_id, 0, page_limit).await?;
-        items.extend(page.into_iter().map(|message| Item {
-            content_type: match message.kind {
-                TelegramMessageKind::Media => ContentType::Media,
-                TelegramMessageKind::Text | TelegramMessageKind::Other => ContentType::Dm,
-            },
-            created_at:
-                time::OffsetDateTime::from_unix_timestamp(message.sent_at_epoch_secs as i64).ok(),
-            text: message.text.clone(),
-            engagement: Default::default(),
-            scope_id: Some(message.chat_id.to_string()),
-            media: Vec::new(),
-            item_ref: ItemRef {
-                platform_id: format!("telegram:{}:{}", message.chat_id, message.message_id),
-                token: Some(format!("{}:{}", message.chat_id, message.message_id)),
-            },
-        }));
+        let mut from_message_id = 0;
+        loop {
+            let page = own_message_page(
+                client,
+                *chat_id,
+                current_user_id,
+                from_message_id,
+                SEARCH_PAGE,
+            )
+            .await?;
+            items.extend(page.messages.into_iter().map(|message| {
+                Item {
+                    content_type: match message.kind {
+                        TelegramMessageKind::Media => ContentType::Media,
+                        TelegramMessageKind::Text | TelegramMessageKind::Other => ContentType::Dm,
+                    },
+                    created_at: time::OffsetDateTime::from_unix_timestamp(
+                        message.sent_at_epoch_secs as i64,
+                    )
+                    .ok(),
+                    text: message.text.clone(),
+                    engagement: Default::default(),
+                    scope_id: Some(message.chat_id.to_string()),
+                    media: Vec::new(),
+                    item_ref: ItemRef {
+                        platform_id: format!("telegram:{}:{}", message.chat_id, message.message_id),
+                        token: Some(format!("{}:{}", message.chat_id, message.message_id)),
+                    },
+                }
+            }));
+            if page.next_from_message_id == 0 {
+                break;
+            }
+            from_message_id = page.next_from_message_id;
+        }
     }
     Ok(Arc::new(TelegramSnapshotAdapter::new(items, client, true)))
 }

@@ -302,7 +302,15 @@ async fn start_run(
     )
     .await?;
 
-    execute_previewed_run(&state, adapter, run_id, pending, backup_passphrase, on_event).await
+    execute_previewed_run(
+        &state,
+        adapter,
+        run_id,
+        pending,
+        backup_passphrase,
+        on_event,
+    )
+    .await
 }
 
 /// Phase-2 machinery shared by every platform's start command: wire backup +
@@ -497,7 +505,7 @@ pub fn run() {
             telegram::telegram_auth_start,
             telegram::telegram_auth_code,
             telegram::telegram_auth_password,
-            telegram::telegram_preview_chats,
+            telegram::telegram_own_message_count,
             telegram::telegram_dry_run_chats,
             telegram::telegram_start_run,
             connect_account,

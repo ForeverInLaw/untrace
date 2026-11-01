@@ -72,18 +72,8 @@ export interface TelegramChatSummary {
   cleanability: string;
 }
 
-export interface TelegramPreviewRequest {
+export interface TelegramDryRunRequest {
   chat_ids: string[];
-  page_limit?: number | null;
-}
-
-export interface TelegramPreviewResult {
-  scanned_chats: number;
-  own_messages: number;
-  page_limit: number;
-}
-
-export interface TelegramDryRunRequest extends TelegramPreviewRequest {
   filter: FilterRequest;
 }
 
@@ -154,8 +144,8 @@ export const api = {
     invoke<TelegramAuthStatus>("telegram_auth_code", { req }),
   telegramAuthPassword: (req: TelegramAuthPasswordRequest) =>
     invoke<TelegramAuthStatus>("telegram_auth_password", { req }),
-  telegramPreviewChats: (req: TelegramPreviewRequest) =>
-    invoke<TelegramPreviewResult>("telegram_preview_chats", { req }),
+  telegramOwnMessageCount: (chatId: string) =>
+    invoke<number>("telegram_own_message_count", { chatId }),
   telegramDryRunChats: (req: TelegramDryRunRequest) =>
     invoke<DryRunResult>("telegram_dry_run_chats", { req }),
 

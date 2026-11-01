@@ -76,6 +76,32 @@
   align-items: end;
 }
 
+.telegram-chat-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.telegram-chat-filter label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+}
+
+.telegram-chat-filter input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--active);
+}
+
+.telegram-chat-filter span,
+.telegram-chat-list__empty {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
 .telegram-chat-list {
   display: grid;
   gap: var(--space-2);

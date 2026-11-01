@@ -55,13 +55,6 @@ pub struct TelegramChatSummary {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct TelegramPreviewResult {
-    pub scanned_chats: usize,
-    pub own_messages: usize,
-    pub page_limit: i32,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct TelegramScopeStatus {
     pub available: bool,
     pub blocker: String,
@@ -88,17 +81,8 @@ pub struct TelegramAuthPasswordRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct TelegramPreviewRequest {
-    pub chat_ids: Vec<String>,
-    #[serde(default)]
-    pub page_limit: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct TelegramDryRunRequest {
     pub chat_ids: Vec<String>,
-    #[serde(default)]
-    pub page_limit: Option<i32>,
     #[serde(default)]
     pub filter: crate::run_filters::FilterRequest,
 }
@@ -190,16 +174,14 @@ mod fallback {
     }
 
     #[tauri::command]
-    pub async fn telegram_preview_chats(
+    pub async fn telegram_own_message_count(
         _state: State<'_, TelegramState>,
-        req: TelegramPreviewRequest,
-    ) -> Result<TelegramPreviewResult, CommandError> {
-        let _ = (&req.chat_ids, &req.page_limit);
-        Ok(TelegramPreviewResult {
-            scanned_chats: 0,
-            own_messages: 0,
-            page_limit: 0,
-        })
+        chat_id: String,
+    ) -> Result<usize, CommandError> {
+        let _ = chat_id;
+        Err(CommandError::msg(
+            "Telegram TDLib is not enabled in this build",
+        ))
     }
 
     #[tauri::command]
@@ -208,7 +190,7 @@ mod fallback {
         _state: State<'_, TelegramState>,
         req: TelegramDryRunRequest,
     ) -> Result<crate::DryRunResult, CommandError> {
-        let _ = (&req.chat_ids, &req.page_limit, &req.filter);
+        let _ = (&req.chat_ids, &req.filter);
         Err(CommandError::msg(
             "Telegram TDLib is not enabled in this build",
         ))
