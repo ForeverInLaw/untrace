@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { MediaBackupWarning } from "../components/MediaBackupWarning";
 import { Button, CheckboxLabel, Notice, Screen, TextField } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
@@ -88,6 +89,7 @@ export function BackupStep() {
           </div>
         </dl>
       </section>
+      <MediaBackupWarning />
       <div className="confirm">
         <CheckboxLabel checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}>
           {t("backup.confirm", { count: pending, platform })}

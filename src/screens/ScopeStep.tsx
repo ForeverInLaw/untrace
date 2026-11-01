@@ -152,30 +152,28 @@ function ChatRow({ chat, count }: { chat: TelegramChatSummary; count: number | n
   const { t } = useTranslation();
   const selected = useFlowStore((s) => s.chatIds.includes(chat.id));
   const toggleChat = useFlowStore((s) => s.toggleChat);
-  const blocked = chat.cleanability === "none";
+  // TDLib cannot search secret chats, so a dry run over one would fail.
+  const unsupported = chat.kind === "secret";
 
   return (
-    <tr className={blocked ? "row row--disabled" : "row"} onClick={() => !blocked && toggleChat(chat.id)}>
+    <tr className={unsupported ? "row row--disabled" : "row"} onClick={() => !unsupported && toggleChat(chat.id)}>
       <td className="cell-check">
         <Checkbox
           aria-label={chat.title || chat.id}
           checked={selected}
-          disabled={blocked}
+          disabled={unsupported}
           onChange={() => toggleChat(chat.id)}
           onClick={(event) => event.stopPropagation()}
         />
       </td>
       <td className="cell-text">{chat.title || chat.id}</td>
       <td className="cell-meta">{t(`chats.kind.${chat.kind}`)}</td>
-      <td className={`cell-meta ${chat.cleanability === "self" ? "cell-meta--caution" : ""}`}>
-        {t(`chats.cleanability.${chat.cleanability}`)}
-      </td>
       {typeof count === "number" ? (
         <td className={`cell-count ${selected ? "cell-count--selected" : ""}`}>
           {t("cleanup.plainNumber", { value: count })}
         </td>
       ) : (
-        <td className="cell-count cell-count--unknown">{t("chats.unknown")}</td>
+        <td className="cell-count cell-count--unknown">{t(unsupported ? "chats.unsupported" : "chats.unknown")}</td>
       )}
     </tr>
   );
@@ -254,7 +252,6 @@ function TelegramScope() {
               <th aria-label={t("chats.select")} className="cell-check" />
               <th>{t("chats.chat")}</th>
               <th className="cell-meta">{t("chats.kind")}</th>
-              <th className="cell-meta">{t("chats.deletion")}</th>
               <th className="cell-count">{t("chats.mine")}</th>
             </tr>
           </thead>

@@ -979,14 +979,6 @@ small {
   font-size: 13px;
 }
 
-.table .cell-meta + .cell-meta {
-  width: 180px;
-}
-
-.table .cell-meta--caution {
-  color: var(--caution);
-}
-
 .table .cell-date {
   width: 120px;
   color: var(--soot);
@@ -995,7 +987,7 @@ small {
 }
 
 .table .cell-count {
-  width: 90px;
+  width: 150px;
   font-weight: 500;
   text-align: right;
 }

@@ -456,9 +456,9 @@ impl From<lethe_telegram::tdlib_bridge::TelegramChatScope> for TelegramChatSumma
                 TelegramChatKind::Secret => TelegramScopeKind::Secret,
             },
             cleanability: match scope.cleanability {
-                TelegramCleanability::DeleteForEveryone => "everyone".into(),
-                TelegramCleanability::OnlyForSelf => "self".into(),
-                TelegramCleanability::NotCleanable => "none".into(),
+                TelegramCleanability::DeleteForEveryone => "Can delete for everyone".into(),
+                TelegramCleanability::OnlyForSelf => "Can delete only for this account".into(),
+                TelegramCleanability::NotCleanable => "Not cleanable by this account".into(),
             },
         }
     }

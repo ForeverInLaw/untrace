@@ -65,13 +65,11 @@ export interface TelegramScopeRule {
   cleanability: string;
 }
 
-export type TelegramCleanability = "everyone" | "self" | "none";
-
 export interface TelegramChatSummary {
   id: string;
   title: string;
   kind: TelegramScopeKind;
-  cleanability: TelegramCleanability;
+  cleanability: string;
 }
 
 export interface TelegramDryRunRequest {
