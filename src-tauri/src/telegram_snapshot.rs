@@ -4,13 +4,16 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::{stream, StreamExt};
 use lethe_adapter::{
-    AdapterError, Capabilities, ContentType, Descriptor, Item, ItemRef, ItemStream, Outcome,
-    PlatformAdapter, PushdownDim, RatePolicy, RiskClass,
+    AdapterError, Capabilities, ContentType, Descriptor, FetchedMedia, Item, ItemRef, ItemStream,
+    MediaRef, Outcome, PlatformAdapter, PushdownDim, RatePolicy, RiskClass,
 };
 use lethe_core::pipeline::{self, RunRequest};
 use lethe_core::ProgressEvent;
 use lethe_store::NewRun;
-use lethe_telegram::tdlib_bridge::{delete_message_batch, TdlibClientId, TelegramMessageKind};
+use lethe_telegram::tdlib_bridge::{
+    delete_downloaded_file, delete_message_batch, download_message_file, TdlibClientId,
+    TelegramMessageKind,
+};
 use lethe_telegram::{assemble_outcomes, parse_message_ref};
 use tauri::State;
 
@@ -157,6 +160,20 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
         assemble_outcomes(&parsed, &chat_results)
     }
 
+    async fn fetch_media(
+        &self,
+        item: &ItemRef,
+        media: &MediaRef,
+    ) -> Result<FetchedMedia, AdapterError> {
+        let (chat_id, message_id) = parse_message_ref(item)
+            .ok_or_else(|| AdapterError::Platform("unparseable Telegram message ref".into()))?;
+        download_message_file(self.client, chat_id, message_id, &media.url).await
+    }
+
+    async fn release_media(&self, file: &FetchedMedia) -> Result<(), AdapterError> {
+        delete_downloaded_file(self.client, file.handle as i32).await
+    }
+
     fn rate_policy(&self) -> RatePolicy {
         RatePolicy {
             max_per_sec: 20.0,
@@ -196,7 +213,7 @@ pub async fn snapshot_items_for_chats(
                     text: message.text.clone(),
                     engagement: Default::default(),
                     scope_id: Some(message.chat_id.to_string()),
-                    media: Vec::new(),
+                    media: message.media.clone(),
                     item_ref: ItemRef {
                         platform_id: format!("telegram:{}:{}", message.chat_id, message.message_id),
                         token: Some(format!("{}:{}", message.chat_id, message.message_id)),

@@ -16,6 +16,8 @@ interface RunState {
   failed: number;
   total: number;
   protected: number;
+  archivedBytes: number;
+  archiveTotalBytes: number;
   /// Seconds until the platform's rate limit lifts; null when not limited.
   throttleWaitSecs: number | null;
   paused: boolean;
@@ -33,6 +35,8 @@ const initial = {
   failed: 0,
   total: 0,
   protected: 0,
+  archivedBytes: 0,
+  archiveTotalBytes: 0,
   throttleWaitSecs: null,
   paused: false,
   status: "idle" as RunStatus,
@@ -49,6 +53,8 @@ export const useRunStore = create<RunState>((set) => ({
           return { seen: e.data.seen, status: "enumerating" };
         case "preview_ready":
           return { total: e.data.pending, protected: e.data.protected, status: "preview" };
+        case "archiving":
+          return { archivedBytes: e.data.done_bytes, archiveTotalBytes: e.data.total_bytes };
         case "deleting":
           return { ...e.data, status: "deleting", throttleWaitSecs: null };
         case "throttled":

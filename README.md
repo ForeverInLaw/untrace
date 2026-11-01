@@ -6,9 +6,10 @@ every run shows a dry-run preview, keeps an encrypted backup and ends with a sig
 receipt. The deletion engine lives in [Lethe](https://github.com/ForeverInLaw/lethe).
 
 The project is in early alpha. The Bluesky path is wired end to end. Telegram works
-behind feature flags and has passed one live run on a test group, but its media does
-not reach the backup yet. The app lists only the services that work in the current
-build, in Russian or English.
+behind feature flags and has passed one live run on a test group. Its media backup
+has not had a live run yet, and polls, locations and contacts back up without their
+content. The app lists only the services that work in the current build, in Russian
+or English.
 
 ## Building
 

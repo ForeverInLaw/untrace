@@ -91,12 +91,11 @@ export const useFlowStore = create<FlowState>((set) => ({
   startOver: () => set({ ...initialCleanup, view: "cleanup", openReceiptId: null }),
 }));
 
-/// The content types a run will cover, limited to what the platform has. Media is
-/// opt-in because Telegram media does not reach the backup yet.
+/// The content types a run will cover, limited to what the platform has.
 export function effectiveContentTypes(draft: ScopeDraft, available: ContentType[]): ContentType[] {
   return draft.contentTypes
     ? draft.contentTypes.filter((type) => available.includes(type))
-    : available.filter((type) => type !== "media");
+    : available;
 }
 
 export function toFilterRequest(draft: ScopeDraft, available: ContentType[]): FilterRequest {
