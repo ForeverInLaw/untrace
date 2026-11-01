@@ -158,9 +158,10 @@ function TelegramConnect() {
 
   const auth = status.data?.auth;
   const phase = auth?.phase ?? "idle";
-  const needsSecret = !changingDetails && (phase === "wait_code" || phase === "wait_password");
+  const signingIn = phase === "wait_code" || phase === "wait_password";
+  const needsSecret = signingIn && !changingDetails;
   const pending = start.isPending || code.isPending || password.isPending;
-  const failure = errorMessage(start.error ?? code.error ?? password.error) ?? (phase === "error" ? auth?.message : null);
+  const failure = errorMessage(start.error ?? code.error ?? password.error ?? status.error) ?? (phase === "error" ? auth?.message : null);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -178,7 +179,9 @@ function TelegramConnect() {
   const ready = phase === "ready";
   const secretLabel = phase === "wait_code" ? t("account.telegram.confirmCode") : t("account.telegram.confirmPassword");
   const submitLabel = needsSecret ? secretLabel : t("account.connect");
-  const canSubmit = needsSecret ? secret.length > 0 : Boolean(apiId.trim() && apiHash.trim() && phone.trim());
+  const canSubmit = needsSecret
+    ? secret.length > 0
+    : Boolean(phone.trim() && (signingIn || (apiId.trim() && apiHash.trim())));
 
   return (
     <Screen
@@ -207,8 +210,9 @@ function TelegramConnect() {
       ) : (
         <form id={CONNECT_FORM} onSubmit={onSubmit}>
           <div className="form-grid form-grid--three">
+            {/* TDLib takes the API pair once per client, so only the phone can change mid sign-in. */}
             <TextField
-              disabled={needsSecret}
+              disabled={signingIn}
               inputMode="numeric"
               label={t("account.telegram.apiId")}
               onChange={(event) => setApiId(event.target.value)}
@@ -216,7 +220,7 @@ function TelegramConnect() {
             />
             <TextField
               autoComplete="off"
-              disabled={needsSecret}
+              disabled={signingIn}
               label={t("account.telegram.apiHash")}
               onChange={(event) => setApiHash(event.target.value)}
               type="password"
