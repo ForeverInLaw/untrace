@@ -35,6 +35,7 @@ use tokio::sync::Mutex;
 mod backup;
 mod platform_registry;
 mod run_filters;
+mod run_reads;
 mod secrets;
 mod session;
 mod telegram;
@@ -47,6 +48,8 @@ const TELEGRAM_DIR: &str = "telegram";
 pub struct AppState {
     pub egress: Arc<lethe_net::Egress>,
     pub store: Arc<Mutex<Store>>,
+    /// Separate connection for UI reads: a run holds `store` until it finishes.
+    pub reader: Arc<Mutex<Store>>,
     pub controls: Arc<Mutex<HashMap<String, RunControl>>>,
     pub pending: Arc<Mutex<HashMap<String, PendingRun>>>,
     pub pds_host: String,
@@ -486,10 +489,12 @@ pub fn run() {
             fs::create_dir_all(&session_dir)?;
             fs::create_dir_all(&telegram_dir)?;
             let store = open_app_store(app)?;
+            let reader = open_app_store(app)?;
 
             app.manage(AppState {
                 egress,
                 store: Arc::new(Mutex::new(store)),
+                reader: Arc::new(Mutex::new(reader)),
                 controls: Arc::new(Mutex::new(HashMap::new())),
                 pending: Arc::new(Mutex::new(HashMap::new())),
                 pds_host,
@@ -515,6 +520,13 @@ pub fn run() {
             pause_run,
             resume_run,
             stop_run,
+            run_reads::preview_summary,
+            run_reads::preview_items,
+            run_reads::set_item_protected,
+            run_reads::list_receipts,
+            run_reads::get_receipt,
+            run_reads::list_accounts,
+            run_reads::disconnect_account,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Untrace");

@@ -16,10 +16,13 @@ interface RunState {
   failed: number;
   total: number;
   protected: number;
-  throttleRate: number | null;
+  /// Seconds until the platform's rate limit lifts; null when not limited.
+  throttleWaitSecs: number | null;
+  paused: boolean;
   status: RunStatus;
   message: string | null;
   apply: (e: ProgressEvent) => void;
+  setPaused: (paused: boolean) => void;
   reset: () => void;
 }
 
@@ -30,7 +33,8 @@ const initial = {
   failed: 0,
   total: 0,
   protected: 0,
-  throttleRate: null,
+  throttleWaitSecs: null,
+  paused: false,
   status: "idle" as RunStatus,
   message: null,
 };
@@ -46,14 +50,15 @@ export const useRunStore = create<RunState>((set) => ({
         case "preview_ready":
           return { total: e.data.pending, protected: e.data.protected, status: "preview" };
         case "deleting":
-          return { ...e.data, status: "deleting" };
+          return { ...e.data, status: "deleting", throttleWaitSecs: null };
         case "throttled":
-          return { throttleRate: e.data.rate_per_sec };
+          return { throttleWaitSecs: e.data.wait_secs };
         case "done":
-          return { status: "done" };
+          return { status: "done", throttleWaitSecs: null };
         case "error":
-          return { status: "error", message: e.data.message };
+          return { status: "error", message: e.data.message, throttleWaitSecs: null };
       }
     }),
+  setPaused: (paused) => set({ paused }),
   reset: () => set(initial),
 }));

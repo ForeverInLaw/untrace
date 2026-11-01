@@ -54,6 +54,23 @@ pub fn all(pds_host: &str) -> Vec<PlatformSummary> {
         "AT Protocol tracer: posts and reactions",
     )];
 
+    let mut telegram = planned(
+        "telegram",
+        "Telegram",
+        RiskClass::Green,
+        vec![ContentType::Dm, ContentType::Media],
+        vec![PushdownDim::Scope, PushdownDim::DateRange],
+        AuthMode::ByoCredentials,
+        "Own messages in selected chats",
+    );
+    if cfg!(any(
+        feature = "telegram-tdlib-docs",
+        feature = "telegram-tdlib-local",
+        feature = "telegram-tdlib-download"
+    )) {
+        telegram.status = PlatformStatus::Live;
+    }
+
     platforms.extend([
         planned(
             "x",
@@ -82,15 +99,7 @@ pub fn all(pds_host: &str) -> Vec<PlatformSummary> {
             AuthMode::OAuthPlanned,
             "Media backup comes first",
         ),
-        planned(
-            "telegram",
-            "Telegram",
-            RiskClass::Green,
-            vec![ContentType::Dm, ContentType::Media],
-            vec![PushdownDim::Scope, PushdownDim::DateRange],
-            AuthMode::ByoCredentials,
-            "Adapter contract exists; auth is queued",
-        ),
+        telegram,
         planned(
             "vk",
             "VK",

@@ -146,6 +146,11 @@ impl TelegramState {
             .insert(client.raw(), starting_status());
     }
 
+    /// A rejected request brings no update from TDLib, so its last state still holds.
+    async fn restore_status(&self, client: TdlibClientId, status: TelegramAuthStatus) {
+        self.auth_states.lock().await.insert(client.raw(), status);
+    }
+
     async fn wait_for_auth_update(&self, client: TdlibClientId) -> TelegramAuthStatus {
         let started = std::time::Instant::now();
         loop {
@@ -242,13 +247,8 @@ pub async fn telegram_auth_start(
     state: State<'_, TelegramState>,
     req: TelegramAuthStartRequest,
 ) -> Result<TelegramAuthStatus, CommandError> {
-    if req.api_id <= 0 {
-        return Err(CommandError::msg("Telegram api_id must be positive"));
-    }
-    if req.api_hash.trim().is_empty() || req.phone_number.trim().is_empty() {
-        return Err(CommandError::msg(
-            "Telegram api_hash and phone number are required",
-        ));
+    if req.phone_number.trim().is_empty() {
+        return Err(CommandError::msg("Telegram phone number is required"));
     }
 
     let client = state.ensure_client().await?;
@@ -259,6 +259,12 @@ pub async fn telegram_auth_start(
     let mut status = state.wait_for_auth_update(client).await;
     if matches!(status.phase, TelegramAuthPhase::Starting) && status.message.contains("parameters")
     {
+        if req.api_id <= 0 {
+            return Err(CommandError::msg("Telegram api_id must be positive"));
+        }
+        if req.api_hash.trim().is_empty() {
+            return Err(CommandError::msg("Telegram api_hash is required"));
+        }
         state.mark_starting(client).await;
         set_tdlib_parameters(&state, client, req.api_id, req.api_hash).await?;
         status = state.wait_for_auth_update(client).await;
@@ -269,14 +275,23 @@ pub async fn telegram_auth_start(
         return Ok(state.current_status().await);
     }
 
-    if !status.message.contains("phone number") {
+    // TDLib also accepts a new number while it waits for a code or password.
+    let accepts_phone = status.message.contains("phone number")
+        || matches!(
+            status.phase,
+            TelegramAuthPhase::WaitCode | TelegramAuthPhase::WaitPassword
+        );
+    if !accepts_phone {
         return Ok(status);
     }
 
     state.mark_starting(client).await;
-    functions::set_authentication_phone_number(req.phone_number, None, client.raw())
-        .await
-        .map_err(map_tdlib_error)?;
+    if let Err(error) =
+        functions::set_authentication_phone_number(req.phone_number, None, client.raw()).await
+    {
+        state.restore_status(client, status).await;
+        return Err(map_tdlib_error(error));
+    }
     status = state.wait_for_auth_update(client).await;
 
     if matches!(status.phase, TelegramAuthPhase::Ready) {
