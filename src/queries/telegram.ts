@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
-  type ProgressEvent,
-  type StartRunRequest,
   type TelegramAuthCodeRequest,
   type TelegramAuthPasswordRequest,
   type TelegramAuthStartRequest,
@@ -74,12 +72,5 @@ export function useTelegramDryRunChatsMutation() {
   return useMutation({
     mutationKey: ["telegram", "dry-run-chats"],
     mutationFn: (req: TelegramDryRunRequest) => api.telegramDryRunChats(req),
-  });
-}
-
-export function useTelegramStartRunMutation(onEvent: (event: ProgressEvent) => void) {
-  return useMutation({
-    mutationKey: ["telegram", "start-run"],
-    mutationFn: (req: StartRunRequest) => api.telegramStartRun(req, onEvent),
   });
 }

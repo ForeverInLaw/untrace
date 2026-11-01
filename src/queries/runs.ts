@@ -1,17 +1,79 @@
-import { useMutation } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   type BuildRunRequest,
   type ConnectAccountRequest,
+  type ContentType,
   type ProgressEvent,
   type StartRunRequest,
   type VerifyBackupRequest,
 } from "../lib/tauri";
 
+const PREVIEW_PAGE_SIZE = 100;
+const RECEIPT_POLL_MS = 500;
+
 export function useConnectAccountMutation() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ["accounts", "connect"],
     mutationFn: (req: ConnectAccountRequest) => api.connectAccount(req),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+  });
+}
+
+export function useAccountsQuery() {
+  return useQuery({ queryKey: ["accounts"], queryFn: api.listAccounts });
+}
+
+export function useDisconnectAccountMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["accounts", "disconnect"],
+    mutationFn: api.disconnectAccount,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+  });
+}
+
+export function usePreviewSummaryQuery(runId: string | null) {
+  return useQuery({
+    enabled: runId !== null,
+    queryKey: ["preview", runId, "summary"],
+    queryFn: () => api.previewSummary(runId ?? ""),
+  });
+}
+
+export function usePreviewItemsQuery(runId: string, protectedOnly: boolean, contentType: ContentType | null) {
+  return useInfiniteQuery({
+    queryKey: ["preview", runId, "items", protectedOnly, contentType],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      api.previewItems({ runId, protectedOnly, contentType, offset: pageParam, limit: PREVIEW_PAGE_SIZE }),
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === PREVIEW_PAGE_SIZE ? pages.length * PREVIEW_PAGE_SIZE : undefined,
+  });
+}
+
+export function useSetItemProtectedMutation(runId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["preview", runId, "protect"],
+    mutationFn: ({ platformId, isProtected }: { platformId: string; isProtected: boolean }) =>
+      api.setItemProtected(runId, platformId, isProtected),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["preview", runId] }),
+  });
+}
+
+export function useReceiptsQuery() {
+  return useQuery({ queryKey: ["receipts"], queryFn: api.listReceipts });
+}
+
+/// The engine reports `done` just before it stores the receipt, so keep asking
+/// until the receipt is there.
+export function useReceiptQuery(runId: string) {
+  return useQuery({
+    queryKey: ["receipts", runId],
+    queryFn: () => api.getReceipt(runId),
+    refetchInterval: (query) => (query.state.data ? false : RECEIPT_POLL_MS),
   });
 }
 
@@ -22,10 +84,12 @@ export function useDryRunMutation() {
   });
 }
 
-export function useStartRunMutation(onEvent: (event: ProgressEvent) => void) {
+/// Starts the previewed run on whichever engine the platform uses.
+export function useStartRunMutation(platformId: string, onEvent: (event: ProgressEvent) => void) {
   return useMutation({
     mutationKey: ["runs", "start"],
-    mutationFn: (req: StartRunRequest) => api.startRun(req, onEvent),
+    mutationFn: (req: StartRunRequest) =>
+      platformId === "telegram" ? api.telegramStartRun(req, onEvent) : api.startRun(req, onEvent),
   });
 }
 

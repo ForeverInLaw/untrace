@@ -65,11 +65,13 @@ export interface TelegramScopeRule {
   cleanability: string;
 }
 
+export type TelegramCleanability = "everyone" | "self" | "none";
+
 export interface TelegramChatSummary {
   id: string;
   title: string;
   kind: TelegramScopeKind;
-  cleanability: string;
+  cleanability: TelegramCleanability;
 }
 
 export interface TelegramDryRunRequest {
@@ -135,6 +137,48 @@ export interface BackupVerification {
   chunks: number;
 }
 
+export interface PreviewSummary extends PreviewCounts {
+  types: { content_type: ContentType; count: number }[];
+}
+
+export interface PreviewItem {
+  platform_id: string;
+  content_type: ContentType;
+  created_at_secs: number | null;
+  text: string | null;
+  protected: boolean;
+}
+
+export interface PreviewItemsRequest {
+  runId: string;
+  protectedOnly: boolean;
+  contentType: ContentType | null;
+  offset: number;
+  limit: number;
+}
+
+export interface RunSummary {
+  run_id: string;
+  platform: string;
+  account_label: string;
+  started_epoch_secs: number;
+  finished_epoch_secs: number;
+  deleted: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface Receipt {
+  summary: RunSummary;
+  public_key_hex: string;
+  signature_hex: string;
+}
+
+export interface StoredAccount {
+  platform: string;
+  label: string;
+}
+
 export const api = {
   platforms: () => invoke<PlatformSummary[]>("platforms"),
   telegramScopeStatus: () => invoke<TelegramScopeStatus>("telegram_scope_status"),
@@ -185,6 +229,15 @@ export const api = {
       runId: req.runId,
       backupPassphrase: req.backupPassphrase,
     }),
+
+  previewSummary: (runId: string) => invoke<PreviewSummary>("preview_summary", { runId }),
+  previewItems: (req: PreviewItemsRequest) => invoke<PreviewItem[]>("preview_items", { ...req }),
+  setItemProtected: (runId: string, platformId: string, isProtected: boolean) =>
+    invoke<boolean>("set_item_protected", { runId, platformId, protected: isProtected }),
+  listReceipts: () => invoke<Receipt[]>("list_receipts"),
+  getReceipt: (runId: string) => invoke<Receipt | null>("get_receipt", { runId }),
+  listAccounts: () => invoke<StoredAccount[]>("list_accounts"),
+  disconnectAccount: (account: StoredAccount) => invoke<void>("disconnect_account", { ...account }),
 
   pauseRun: (runId: string) => invoke<void>("pause_run", { runId }),
   resumeRun: (runId: string) => invoke<void>("resume_run", { runId }),
