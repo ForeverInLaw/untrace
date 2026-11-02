@@ -9,6 +9,7 @@ import {
   useTelegramAuthCodeMutation,
   useTelegramAuthPasswordMutation,
   useTelegramAuthStartMutation,
+  useTelegramAuthStatusQuery,
   useTelegramScopeStatusQuery,
 } from "../queries/telegram";
 import { useFlowStore } from "../stores/flowStore";
@@ -151,13 +152,13 @@ function TelegramConnect() {
   const [phone, setPhone] = useState("");
   const [secret, setSecret] = useState("");
   const [changingDetails, setChangingDetails] = useState(false);
-  const status = useTelegramScopeStatusQuery(true);
+  const status = useTelegramAuthStatusQuery();
   const start = useTelegramAuthStartMutation();
   const code = useTelegramAuthCodeMutation();
   const password = useTelegramAuthPasswordMutation();
   const logOut = useDisconnectAccountMutation(useFlowStore((s) => s.accountRemoved));
 
-  const auth = status.data?.auth;
+  const auth = status.data;
   const phase = auth?.phase ?? "idle";
   const label = auth?.account_label ?? "Telegram";
   const signingIn = phase === "wait_code" || phase === "wait_password";
@@ -183,6 +184,8 @@ function TelegramConnect() {
   };
 
   const ready = phase === "ready";
+  // Loads the chat list in the background, so the next step opens with it.
+  useTelegramScopeStatusQuery(ready);
   const secretLabel = phase === "wait_code" ? t("account.telegram.confirmCode") : t("account.telegram.confirmPassword");
   const submitLabel = needsSecret ? secretLabel : t("account.connect");
   const canSubmit = needsSecret

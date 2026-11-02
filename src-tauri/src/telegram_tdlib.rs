@@ -398,6 +398,14 @@ impl TelegramState {
     }
 }
 
+/// The sign-in state alone, answered without loading the chat list.
+#[tauri::command]
+pub async fn telegram_auth_status(
+    state: State<'_, TelegramState>,
+) -> Result<TelegramAuthStatus, CommandError> {
+    state.known_status().await
+}
+
 #[tauri::command]
 pub async fn telegram_scope_status(
     state: State<'_, TelegramState>,
@@ -655,6 +663,7 @@ impl From<lethe_telegram::tdlib_bridge::TelegramChatScope> for TelegramChatSumma
                 TelegramCleanability::OnlyForSelf => "Can delete only for this account".into(),
                 TelegramCleanability::NotCleanable => "Not cleanable by this account".into(),
             },
+            last_message_id: scope.last_message_id.map(|id| id.to_string()),
         }
     }
 }
