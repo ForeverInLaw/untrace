@@ -409,6 +409,10 @@ pub(crate) async fn execute_previewed_run(
     consent: RunConsent,
     on_event: Channel<ProgressEvent>,
 ) -> Result<(), CommandError> {
+    // Checked before the backup target, which writes key files for the run.
+    if !run_reads::backup_space_for(state, &run_id, consent).await?.fits {
+        return Err(CommandError::msg("not enough free disk space for the backup"));
+    }
     // Load keys/backup target up front: never start deleting what we cannot seal.
     let signer = secrets::receipt_signer()?;
     let backup = backup::backup_target(
@@ -418,9 +422,6 @@ pub(crate) async fn execute_previewed_run(
             .as_deref()
             .filter(|passphrase| !passphrase.is_empty()),
     )?;
-    if !run_reads::backup_space_for(state, &run_id, consent).await?.fits {
-        return Err(CommandError::msg("not enough free disk space for the backup"));
-    }
 
     let started = now_secs();
     state

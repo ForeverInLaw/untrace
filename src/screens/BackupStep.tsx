@@ -95,7 +95,7 @@ export function BackupStep() {
       actions={
         <>
           <Button onClick={() => goTo("preview")}>{t("backup.back")}</Button>
-          <Button disabled={!confirmed || start.isPending || deleting === 0 || spaceQuery.isPlaceholderData || space?.fits === false} kind="primary" onClick={onStart}>
+          <Button disabled={!confirmed || start.isPending || deleting === 0 || spaceQuery.isPlaceholderData || !space?.fits} kind="primary" onClick={onStart}>
             {t("backup.start", { count: deleting })}
           </Button>
         </>
