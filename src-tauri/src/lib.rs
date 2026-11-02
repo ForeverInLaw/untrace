@@ -565,6 +565,16 @@ fn now_secs() -> u64 {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // One instance only: a second one would share the store, and its start-up
+        // cleanup would take the rows of a run the first one is previewing or running.
+        // Registered first, as the plugin requires.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                // Bringing the window forward is a courtesy; failing to changes nothing.
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let pds_host = std::env::var("LETHE_PDS_HOST").unwrap_or_else(|_| "bsky.social".into());
@@ -591,6 +601,8 @@ pub fn run() {
             fs::create_dir_all(&session_dir)?;
             fs::create_dir_all(&telegram_dir)?;
             let store = open_app_store(app)?;
+            // No run is previewed or under way yet, so what none can use goes now.
+            store.forget_stale_runs()?;
             let reader = open_app_store(app)?;
 
             app.manage(AppState {
