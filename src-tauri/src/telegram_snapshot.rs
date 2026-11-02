@@ -55,6 +55,7 @@ pub async fn telegram_dry_run_chats(
         plan: run_filters::plan_from_filter(&filter),
         filter: filter.clone(),
         backup: true,
+        allow_incomplete_backup: false,
     };
     let pending = PendingRun {
         platform: run_req.platform.clone(),
@@ -214,6 +215,8 @@ pub async fn snapshot_items_for_chats(
                     engagement: Default::default(),
                     scope_id: Some(message.chat_id.to_string()),
                     media: message.media.clone(),
+                    platform_record: Some(message.platform_record),
+                    backup_gap: message.backup_gap,
                     item_ref: ItemRef {
                         platform_id: format!("telegram:{}:{}", message.chat_id, message.message_id),
                         token: Some(format!("{}:{}", message.chat_id, message.message_id)),

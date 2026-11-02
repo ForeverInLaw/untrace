@@ -31,19 +31,26 @@ export function BackupStep() {
   const goTo = useFlowStore((s) => s.goTo);
   const apply = useRunStore((s) => s.apply);
   const [confirmed, setConfirmed] = useState(false);
+  const [deleteIncomplete, setDeleteIncomplete] = useState(false);
   const summaryQuery = usePreviewSummaryQuery(runId);
   const summary = summaryQuery.data;
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId)?.display_name ?? platformId;
   const start = useStartRunMutation(platformId, apply);
   const period = usePeriodLabel();
-  const pending = summary?.pending ?? 0;
+  const gaps = summary?.backup_gaps ?? 0;
+  const kept = deleteIncomplete ? 0 : gaps;
+  const deleting = (summary?.pending ?? 0) - kept;
   const types = summary?.types.map(({ content_type: type }) => t(`contentType.${type}`).toLowerCase()).join(", ");
   const error = errorMessage(start.error ?? summaryQuery.error);
   const formatBytes = useByteFormat();
   const space = summary?.backup_space;
 
   const onStart = async () => {
-    await start.mutateAsync({ runId, backupPassphrase: passphrase.length > 0 ? passphrase : null });
+    await start.mutateAsync({
+      runId,
+      backupPassphrase: passphrase.length > 0 ? passphrase : null,
+      allowIncompleteBackup: deleteIncomplete,
+    });
     goTo("run");
   };
 
@@ -52,8 +59,8 @@ export function BackupStep() {
       actions={
         <>
           <Button onClick={() => goTo("preview")}>{t("backup.back")}</Button>
-          <Button disabled={!confirmed || start.isPending || pending === 0 || space?.fits === false} kind="primary" onClick={onStart}>
-            {t("backup.start", { count: pending })}
+          <Button disabled={!confirmed || start.isPending || deleting === 0 || space?.fits === false} kind="primary" onClick={onStart}>
+            {t("backup.start", { count: deleting })}
           </Button>
         </>
       }
@@ -79,7 +86,7 @@ export function BackupStep() {
           </div>
           <div>
             <dt>{t("backup.willDelete")}</dt>
-            <dd><em className="count count--text">{t("backup.itemCount", { count: pending })}</em>: {types}</dd>
+            <dd><em className="count count--text">{t("backup.itemCount", { count: deleting })}</em>: {types}</dd>
           </div>
           {space && space.media > 0 && (
             <div>
@@ -93,7 +100,7 @@ export function BackupStep() {
           </div>
           <div>
             <dt>{t("backup.stays")}</dt>
-            <dd>{t("backup.staysValue", { protected: summary?.protected ?? 0 })}</dd>
+            <dd>{t("backup.staysValue", { protected: (summary?.protected ?? 0) + kept })}</dd>
           </div>
         </dl>
       </section>
@@ -102,9 +109,21 @@ export function BackupStep() {
           {t("backup.notEnoughSpace", { needed: formatBytes(space.needed), available: formatBytes(space.available) })}
         </Notice>
       )}
+      {gaps > 0 && <Notice tone="caution">{t("backup.gapNotice", { count: gaps })}</Notice>}
       <div className="confirm">
+        {gaps > 0 && (
+          <CheckboxLabel
+            checked={deleteIncomplete}
+            onChange={(event) => {
+              setDeleteIncomplete(event.target.checked);
+              setConfirmed(false);
+            }}
+          >
+            {t("backup.gapConfirm", { count: gaps })}
+          </CheckboxLabel>
+        )}
         <CheckboxLabel checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}>
-          {t("backup.confirm", { count: pending, platform })}
+          {t("backup.confirm", { count: deleting, platform })}
         </CheckboxLabel>
       </div>
       {error && <Notice tone="fault">{error}</Notice>}

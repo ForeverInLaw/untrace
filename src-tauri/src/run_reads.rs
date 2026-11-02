@@ -23,6 +23,8 @@ pub struct PreviewSummary {
     protected: u64,
     types: Vec<TypeCount>,
     backup_space: BackupSpace,
+    /// Pending items the backup cannot hold in full; they go only with consent.
+    backup_gaps: u64,
 }
 
 #[derive(Serialize)]
@@ -74,6 +76,7 @@ pub async fn preview_summary(
         protected: counts.protected,
         types,
         backup_space,
+        backup_gaps: store.pending_backup_gaps(&run_id)?,
     })
 }
 

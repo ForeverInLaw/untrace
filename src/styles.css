@@ -1062,6 +1062,8 @@ small {
 }
 
 .confirm {
+  display: grid;
+  gap: 10px;
   margin-top: 18px;
   padding: 16px;
   border-radius: var(--radius-control);

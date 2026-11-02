@@ -394,6 +394,7 @@ pub async fn telegram_start_run(
     state: State<'_, TelegramState>,
     run_id: String,
     backup_passphrase: Option<String>,
+    allow_incomplete_backup: bool,
     on_event: Channel<ProgressEvent>,
 ) -> Result<(), CommandError> {
     let pending = app
@@ -419,7 +420,16 @@ pub async fn telegram_start_run(
     let adapter: Arc<dyn PlatformAdapter> =
         Arc::new(snapshot::TelegramSnapshotAdapter::for_execute(client, true));
 
-    crate::execute_previewed_run(&app, adapter, run_id, pending, backup_passphrase, on_event).await
+    crate::execute_previewed_run(
+        &app,
+        adapter,
+        run_id,
+        pending,
+        backup_passphrase,
+        allow_incomplete_backup,
+        on_event,
+    )
+    .await
 }
 
 async fn set_tdlib_parameters(
