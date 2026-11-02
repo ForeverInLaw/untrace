@@ -103,11 +103,11 @@ function ItemsTable({ runId, filter, undeletable }: { runId: string; filter: Fil
 /// Shown only when some of the set would not simply vanish for everyone.
 function DeleteReachFacts({ summary }: { summary: PreviewSummary }) {
   const { t } = useTranslation();
+  const count = useCount();
   const { pending, only_for_self: onlyForSelf, undeletable } = summary;
   if (onlyForSelf === 0 && undeletable === 0) {
     return null;
   }
-  const count = useCount();
   return (
     <section>
       <dl className="facts facts--compact">

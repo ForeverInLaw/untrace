@@ -107,7 +107,7 @@ export function BackupStep() {
           </div>
           <div>
             <dt>{t("backup.willDelete")}</dt>
-            <dd><em className="count count--text">{t("backup.itemCount", { count: deleting })}</em>: {types}</dd>
+            <dd><em className="count count--text">{t("backup.itemCount", { count: deleting })}</em>{kept === 0 && `: ${types}`}</dd>
           </div>
           {space && space.media > 0 && (
             <div>

@@ -143,14 +143,15 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
     }
 
     async fn delete(&self, items: &[ItemRef]) -> Vec<Outcome> {
-        let mut current = Vec::with_capacity(items.len());
+        let mut checked = Vec::with_capacity(items.len());
         for item in items {
-            current.push(match parse_message_ref(item) {
+            let rights = match parse_message_ref(item) {
                 Some((chat_id, message_id)) => read_delete_rights(self.client, chat_id, message_id).await,
                 None => Err(AdapterError::Platform("unparseable Telegram message ref".into())),
-            });
+            };
+            checked.push((item, rights));
         }
-        let plan = DeletePlan::new(items, current, self.current_user_id);
+        let plan = DeletePlan::new(checked, self.current_user_id);
 
         let mut results = HashMap::new();
         for (call, message_ids) in &plan.calls {
