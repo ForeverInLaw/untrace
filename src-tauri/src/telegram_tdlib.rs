@@ -11,7 +11,7 @@ use lethe_telegram::tdlib_bridge::{
     TelegramCleanability,
 };
 use tauri::ipc::Channel;
-use tauri::{async_runtime, State};
+use tauri::State;
 use tdlib_rs::{enums, functions};
 use tokio::sync::{Mutex, OnceCell};
 
@@ -83,22 +83,23 @@ impl TelegramState {
 
         let auth_states = self.auth_states.clone();
         let online = self.online.clone();
-        async_runtime::spawn(async move {
-            loop {
-                match tokio::task::spawn_blocking(tdlib_rs::receive).await {
-                    Ok(Some((enums::Update::AuthorizationState(update), client_id))) => {
-                        let status = status_from_authorization(update.authorization_state);
-                        auth_states.lock().await.insert(client_id, status);
-                    }
-                    Ok(Some((enums::Update::ConnectionState(update), _))) => {
-                        let reachable = matches!(
-                            update.state,
-                            enums::ConnectionState::Ready | enums::ConnectionState::Updating
-                        );
-                        online.store(reachable, Ordering::Release);
-                    }
-                    _ => tokio::time::sleep(Duration::from_millis(30)).await,
+        // `receive` already blocks until TDLib has something, so the loop reads back to
+        // back: every answer to a request passes through here, and a pause between
+        // reads would hold all of them up behind the flood of updates after sign-in.
+        std::thread::spawn(move || loop {
+            match tdlib_rs::receive() {
+                Some((enums::Update::AuthorizationState(update), client_id)) => {
+                    let status = status_from_authorization(update.authorization_state);
+                    auth_states.blocking_lock().insert(client_id, status);
                 }
+                Some((enums::Update::ConnectionState(update), _)) => {
+                    let reachable = matches!(
+                        update.state,
+                        enums::ConnectionState::Ready | enums::ConnectionState::Updating
+                    );
+                    online.store(reachable, Ordering::Release);
+                }
+                _ => {}
             }
         });
     }
