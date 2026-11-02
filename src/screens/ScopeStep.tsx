@@ -6,8 +6,9 @@ import type { ContentType, DryRunResult, TelegramChatSummary } from "../lib/taur
 import { usePlatformsQuery } from "../queries/platforms";
 import { useDryRunMutation } from "../queries/runs";
 import {
+  useRecountOwnMessages,
   useTelegramDryRunChatsMutation,
-  useTelegramOwnMessageCountsQuery,
+  useTelegramOwnMessageCounts,
   useTelegramScopeStatusQuery,
 } from "../queries/telegram";
 import { effectiveContentTypes, toFilterRequest, useFlowStore } from "../stores/flowStore";
@@ -181,15 +182,16 @@ function ChatRow({ chat, count }: { chat: TelegramChatSummary; count: number | n
 
 function TelegramScope() {
   const { t } = useTranslation();
+  const account = useFlowStore((s) => s.account) ?? "";
   const chatIds = useFlowStore((s) => s.chatIds);
   const draft = useFlowStore((s) => s.draft);
   const available = useAvailableTypes();
   const status = useTelegramScopeStatusQuery(true);
   const chats = status.data?.chats ?? [];
-  const ownCounts = useTelegramOwnMessageCountsQuery(chats);
+  const { counts, uncounted } = useTelegramOwnMessageCounts(account, chats);
+  const recount = useRecountOwnMessages(account);
   const dryRun = useTelegramDryRunChatsMutation();
   const onReady = usePreviewReady();
-  const counts = ownCounts.data ?? {};
   const visible = chats.filter((chat) => chat.id in counts && counts[chat.id] !== 0);
   const knownCounts = chatIds.map((id) => counts[id]).filter((count) => typeof count === "number");
   const messages = knownCounts.reduce((sum, count) => sum + count, 0);
@@ -222,15 +224,15 @@ function TelegramScope() {
         <p className="screen__lead">
           {!status.isError && (status.isPending
             ? t("chats.loading")
-            : ownCounts.isFetching
-              ? t("chats.progress", { checked: Object.keys(counts).length, total: chats.length })
+            : uncounted > 0
+              ? t("chats.progress", { checked: chats.length - uncounted, total: chats.length })
               : t("chats.done", { visible: visible.length, total: chats.length }))}
         </p>
         <button
           aria-label={t("chats.recheck")}
           className="icon-button"
-          disabled={status.isFetching || ownCounts.isFetching}
-          onClick={() => (status.isError ? status.refetch() : ownCounts.refetch())}
+          disabled={status.isFetching || uncounted > 0}
+          onClick={() => (status.isError ? status.refetch() : recount())}
           title={t("chats.recheck")}
           type="button"
         >
@@ -261,7 +263,7 @@ function TelegramScope() {
             ))}
           </tbody>
         </table>
-        {!ownCounts.isFetching && status.isSuccess && visible.length === 0 && (
+        {uncounted === 0 && status.isSuccess && visible.length === 0 && (
           <p className="empty">{t("chats.empty")}</p>
         )}
       </div>

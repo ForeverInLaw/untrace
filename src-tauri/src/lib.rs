@@ -608,6 +608,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             platforms,
+            telegram::telegram_auth_status,
             telegram::telegram_scope_status,
             telegram::telegram_auth_start,
             telegram::telegram_auth_code,

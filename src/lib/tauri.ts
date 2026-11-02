@@ -74,6 +74,7 @@ export interface TelegramChatSummary {
   title: string;
   kind: TelegramScopeKind;
   cleanability: string;
+  last_message_id: string | null;
 }
 
 export interface TelegramDryRunRequest {
@@ -243,6 +244,7 @@ export interface StoredAccount {
 
 export const api = {
   platforms: () => invoke<PlatformSummary[]>("platforms"),
+  telegramAuthStatus: () => invoke<TelegramAuthStatus>("telegram_auth_status"),
   telegramScopeStatus: () => invoke<TelegramScopeStatus>("telegram_scope_status"),
   telegramAuthStart: (req: TelegramAuthStartRequest) =>
     invoke<TelegramAuthStatus>("telegram_auth_start", { req }),

@@ -57,6 +57,8 @@ pub struct TelegramChatSummary {
     pub title: String,
     pub kind: TelegramScopeKind,
     pub cleanability: String,
+    /// Changes with each new message, so the UI knows when a count is out of date.
+    pub last_message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -159,6 +161,13 @@ mod fallback {
             rules: default_rules(),
             chats: Vec::new(),
         })
+    }
+
+    #[tauri::command]
+    pub async fn telegram_auth_status(
+        _state: State<'_, TelegramState>,
+    ) -> Result<TelegramAuthStatus, CommandError> {
+        Ok(disabled_status())
     }
 
     #[tauri::command]
