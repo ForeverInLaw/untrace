@@ -82,6 +82,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
 
   const { summary, signature_hex: signature } = receipt;
   const platform = platforms.find((item) => item.id === summary.platform)?.display_name ?? summary.platform;
+  const onlyForSelf = summary.deleted_only_for_self ?? 0;
   const backupLine = verify.data?.ok
     ? <span className="fact-safe">{t("receipt.backupOk", { items: verify.data.items, files: verify.data.media_files })}</span>
     : verifyFailed
@@ -97,6 +98,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
       lead={summary.failed > 0 ? t("receipt.failedLine", { count: summary.failed }) : undefined}
       note={t("preview.limit")}
     >
+      {onlyForSelf > 0 && <Notice tone="caution">{t("receipt.onlyForSelfLine", { count: onlyForSelf })}</Notice>}
       <div className="receipt">
         <div>
           <dl className="facts facts--compact">
@@ -104,6 +106,9 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
             <div><dt>{t("receipt.started")}</dt><dd>{format.moment(summary.started_epoch_secs)}</dd></div>
             <div><dt>{t("receipt.finished")}</dt><dd>{format.moment(summary.finished_epoch_secs)}</dd></div>
             <div><dt>{t("receipt.deleted")}</dt><dd>{t("cleanup.plainNumber", { value: summary.deleted })}</dd></div>
+            {onlyForSelf > 0 && (
+              <div><dt>{t("preview.onlyForSelf")}</dt><dd>{t("cleanup.plainNumber", { value: onlyForSelf })}</dd></div>
+            )}
             <div><dt>{t("receipt.skipped")}</dt><dd>{t("cleanup.plainNumber", { value: summary.skipped })}</dd></div>
             <div>
               <dt>{t("receipt.failed")}</dt>

@@ -4,7 +4,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { Button, Checkbox, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
-import type { ContentType, PreviewItem } from "../lib/tauri";
+import type { ContentType, PreviewItem, PreviewSummary } from "../lib/tauri";
 import {
   useIsSavingProtection,
   usePreviewItemsQuery,
@@ -39,7 +39,10 @@ function ItemRow({ item, runId }: { item: PreviewItem; runId: string }) {
           ) : item.protected ? (
             <span className="hint hint--stays">{t("preview.stay")}</span>
           ) : (
-            <span className="hint hint--protect">{t("preview.protect")}</span>
+            <>
+              {item.only_for_self && <span className="hint hint--reach">{t("preview.onlyForSelf")}</span>}
+              <span className="hint hint--protect">{t("preview.protect")}</span>
+            </>
           )}
         </div>
       </td>
@@ -90,6 +93,26 @@ function ItemsTable({ runId, filter }: { runId: string; filter: Filter }) {
   );
 }
 
+/// Shown only when some of the set would not simply vanish for everyone.
+function DeleteReachFacts({ summary }: { summary: PreviewSummary }) {
+  const { t } = useTranslation();
+  const { pending, only_for_self: onlyForSelf, undeletable } = summary;
+  if (onlyForSelf === 0 && undeletable === 0) {
+    return null;
+  }
+  const count = (value: number) => t("cleanup.plainNumber", { value });
+  return (
+    <section>
+      <dl className="facts facts--compact">
+        <div><dt>{t("preview.reachEveryone")}</dt><dd>{count(pending - onlyForSelf)}</dd></div>
+        {onlyForSelf > 0 && <div><dt>{t("preview.onlyForSelf")}</dt><dd>{count(onlyForSelf)}</dd></div>}
+        {undeletable > 0 && <div><dt>{t("preview.reachNowhere")}</dt><dd>{count(undeletable)}</dd></div>}
+      </dl>
+      {onlyForSelf > 0 && <p className="help">{t("preview.onlyForSelfNote")}</p>}
+    </section>
+  );
+}
+
 export function PreviewStep() {
   const { t } = useTranslation();
   const runId = useFlowStore((s) => s.runId) ?? "";
@@ -118,6 +141,7 @@ export function PreviewStep() {
       note={t("preview.limit")}
     >
       {summaryQuery.isError && <Notice tone="fault">{errorMessage(summaryQuery.error)}</Notice>}
+      {summary && <DeleteReachFacts summary={summary} />}
       <fieldset aria-label={t("preview.filterLabel")} className="chips">
         <button aria-pressed={filter.kind === "all"} className="chip" onClick={() => setFilter({ kind: "all" })} type="button">
           {t("preview.all")} <span>{count(pending)}</span>

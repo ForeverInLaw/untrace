@@ -141,7 +141,8 @@ export function useRetryUnsavedFilesMutation(
         await start.mutateAsync({
           runId: retryId,
           backupPassphrase,
-          consent: { allowIncompleteBackup: true, allowLostFiles },
+          // These items reached the run through the same consents, so they need not be asked again.
+          consent: { allowIncompleteBackup: true, allowLostFiles, allowOnlyForSelf: true },
         });
       } catch (error) {
         await api.discardRetry(retryId);
