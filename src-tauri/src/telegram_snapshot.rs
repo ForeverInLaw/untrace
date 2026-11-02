@@ -11,10 +11,10 @@ use lethe_core::pipeline::{self, RunRequest};
 use lethe_core::ProgressEvent;
 use lethe_store::NewRun;
 use lethe_telegram::tdlib_bridge::{
-    delete_downloaded_file, delete_message_batch, download_message_file, TdlibClientId,
-    TelegramMessageKind,
+    delete_downloaded_file, delete_message_batch, download_message_file, read_delete_rights,
+    TdlibClientId, TelegramMessageKind,
 };
-use lethe_telegram::{assemble_outcomes, parse_message_ref};
+use lethe_telegram::{message_token, parse_message_ref, DeletePlan};
 use tauri::State;
 
 use super::{own_message_page, parse_chat_id, TelegramState};
@@ -57,6 +57,7 @@ pub async fn telegram_dry_run_chats(
         backup: true,
         allow_incomplete_backup: false,
         allow_lost_files: false,
+        allow_only_for_self: false,
     };
     let pending = PendingRun {
         platform: run_req.platform.clone(),
@@ -94,24 +95,21 @@ pub struct TelegramSnapshotAdapter {
     descriptor: Descriptor,
     items: Vec<Item>,
     client: TdlibClientId,
-    /// Delete-for-everyone where Telegram permits it. ponytail: single policy;
-    /// thread a per-chat cleanability map through here if mixed-scope runs need
-    /// per-chat revoke decisions.
-    revoke: bool,
+    current_user_id: i64,
 }
 
 impl TelegramSnapshotAdapter {
     /// Execute-phase adapter: Phase 2 reads pending rows from the store, so it
     /// only needs delete + rate_policy. ponytail: empty item set is correct —
     /// enumerate is never called during execute.
-    pub fn for_execute(client: TdlibClientId, revoke: bool) -> Self {
-        Self::new(Vec::new(), client, revoke)
+    pub fn for_execute(client: TdlibClientId, current_user_id: i64) -> Self {
+        Self::new(Vec::new(), client, current_user_id)
     }
 
-    pub fn new(items: Vec<Item>, client: TdlibClientId, revoke: bool) -> Self {
+    pub fn new(items: Vec<Item>, client: TdlibClientId, current_user_id: i64) -> Self {
         Self {
             client,
-            revoke,
+            current_user_id,
             descriptor: Descriptor {
                 id: "telegram",
                 display_name: "Telegram",
@@ -145,21 +143,23 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
     }
 
     async fn delete(&self, items: &[ItemRef]) -> Vec<Outcome> {
-        let parsed: Vec<Option<(i64, i64)>> = items.iter().map(parse_message_ref).collect();
-
-        // TDLib deletes per chat, so group the batch's message ids by chat id.
-        let mut by_chat: HashMap<i64, Vec<i64>> = HashMap::new();
-        for (chat_id, message_id) in parsed.iter().flatten() {
-            by_chat.entry(*chat_id).or_default().push(*message_id);
+        let mut checked = Vec::with_capacity(items.len());
+        for item in items {
+            let rights = match parse_message_ref(item) {
+                Some((chat_id, message_id)) => read_delete_rights(self.client, chat_id, message_id).await,
+                None => Err(AdapterError::Platform("unparseable Telegram message ref".into())),
+            };
+            checked.push((item, rights));
         }
+        let plan = DeletePlan::new(checked, self.current_user_id);
 
-        let mut chat_results: HashMap<i64, Result<(), AdapterError>> = HashMap::new();
-        for (chat_id, message_ids) in by_chat {
-            let result = delete_message_batch(self.client, chat_id, message_ids, self.revoke).await;
-            chat_results.insert(chat_id, result);
+        let mut results = HashMap::new();
+        for (call, message_ids) in &plan.calls {
+            let result =
+                delete_message_batch(self.client, call.chat_id, message_ids.clone(), call.revoke).await;
+            results.insert(*call, result);
         }
-
-        assemble_outcomes(&parsed, &chat_results)
+        plan.outcomes(&results)
     }
 
     async fn fetch_media(
@@ -218,9 +218,10 @@ pub async fn snapshot_items_for_chats(
                     media: message.media.clone(),
                     platform_record: Some(message.platform_record),
                     backup_gap: message.backup_gap,
+                    delete_reach: message.delete_reach,
                     item_ref: ItemRef {
                         platform_id: format!("telegram:{}:{}", message.chat_id, message.message_id),
-                        token: Some(format!("{}:{}", message.chat_id, message.message_id)),
+                        token: Some(message_token(message.chat_id, message.message_id, message.delete_reach)),
                     },
                 }
             }));
@@ -230,5 +231,5 @@ pub async fn snapshot_items_for_chats(
             from_message_id = page.next_from_message_id;
         }
     }
-    Ok(Arc::new(TelegramSnapshotAdapter::new(items, client, true)))
+    Ok(Arc::new(TelegramSnapshotAdapter::new(items, client, current_user_id)))
 }

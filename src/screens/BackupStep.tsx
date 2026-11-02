@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, CheckboxLabel, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
@@ -22,6 +22,21 @@ function usePeriodLabel() {
   return dateTo ? t("backup.periodTo", { date: format.calendarDay(dateTo) }) : t("backup.periodAll");
 }
 
+interface ConsentBoxProps {
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}
+
+function ConsentBox({ checked, disabled, onChange, children }: ConsentBoxProps) {
+  return (
+    <CheckboxLabel checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)}>
+      {children}
+    </CheckboxLabel>
+  );
+}
+
 export function BackupStep() {
   const { t } = useTranslation();
   const runId = useFlowStore((s) => s.runId) ?? "";
@@ -33,24 +48,37 @@ export function BackupStep() {
   const apply = useRunStore((s) => s.apply);
   const [confirmed, setConfirmed] = useState(false);
   const [deleteIncomplete, setDeleteIncomplete] = useState(false);
+  const [deleteForSelf, setDeleteForSelf] = useState(false);
   const summaryQuery = usePreviewSummaryQuery(runId);
   const summary = summaryQuery.data;
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId)?.display_name ?? platformId;
   const start = useStartRunMutation(platformId, apply);
   const period = usePeriodLabel();
   const gaps = summary?.backup_gaps ?? 0;
-  const kept = deleteIncomplete ? 0 : gaps;
+  const onlyForSelf = summary?.only_for_self ?? 0;
+  const undeletable = summary?.undeletable ?? 0;
+  // An item needing both agreements stays unless both are given, and counts once.
+  const kept =
+    (deleteIncomplete ? 0 : gaps) +
+    (deleteForSelf ? 0 : onlyForSelf) -
+    (deleteIncomplete || deleteForSelf ? 0 : summary?.consents_overlap ?? 0);
   const deleting = (summary?.pending ?? 0) - kept;
   const types = summary?.types.map(({ content_type: type }) => t(`contentType.${type}`).toLowerCase()).join(", ");
   const error = errorMessage(start.error ?? summaryQuery.error);
   const formatBytes = useByteFormat();
   const space = summary?.backup_space;
 
+  // Changing what goes also changes the count that was confirmed.
+  const consentTo = (set: (allowed: boolean) => void) => (allowed: boolean) => {
+    set(allowed);
+    setConfirmed(false);
+  };
+
   const onStart = async () => {
     await start.mutateAsync({
       runId,
       backupPassphrase: passphrase.length > 0 ? passphrase : null,
-      consent: { allowIncompleteBackup: deleteIncomplete, allowLostFiles: false },
+      consent: { allowIncompleteBackup: deleteIncomplete, allowLostFiles: false, allowOnlyForSelf: deleteForSelf },
     });
     goTo("run");
   };
@@ -79,7 +107,7 @@ export function BackupStep() {
           </div>
           <div>
             <dt>{t("backup.willDelete")}</dt>
-            <dd><em className="count count--text">{t("backup.itemCount", { count: deleting })}</em>: {types}</dd>
+            <dd><em className="count count--text">{t("backup.itemCount", { count: deleting })}</em>{kept === 0 && `: ${types}`}</dd>
           </div>
           {space && space.media > 0 && (
             <div>
@@ -95,6 +123,12 @@ export function BackupStep() {
             <dt>{t("backup.stays")}</dt>
             <dd>{t("backup.staysValue", { protected: (summary?.protected ?? 0) + kept })}</dd>
           </div>
+          {undeletable > 0 && (
+            <div>
+              <dt>{t("preview.reachNowhere")}</dt>
+              <dd>{t("cleanup.plainNumber", { value: undeletable })}</dd>
+            </div>
+          )}
         </dl>
       </section>
       {space?.fits === false && (
@@ -103,21 +137,20 @@ export function BackupStep() {
         </Notice>
       )}
       {gaps > 0 && <Notice tone="caution">{t("backup.gapNotice", { count: gaps })}</Notice>}
+      {onlyForSelf > 0 && <Notice tone="caution">{t("backup.onlyForSelfNotice", { count: onlyForSelf })}</Notice>}
       <div className="confirm">
         {gaps > 0 && (
-          <CheckboxLabel
-            checked={deleteIncomplete}
-            disabled={start.isPending}
-            onChange={(event) => {
-              setDeleteIncomplete(event.target.checked);
-              setConfirmed(false);
-            }}
-          >
+          <ConsentBox checked={deleteIncomplete} disabled={start.isPending} onChange={consentTo(setDeleteIncomplete)}>
             {t("backup.gapConfirm", { count: gaps })}
-          </CheckboxLabel>
+          </ConsentBox>
+        )}
+        {onlyForSelf > 0 && (
+          <ConsentBox checked={deleteForSelf} disabled={start.isPending} onChange={consentTo(setDeleteForSelf)}>
+            {t("backup.onlyForSelfConfirm", { count: onlyForSelf })}
+          </ConsentBox>
         )}
         <CheckboxLabel checked={confirmed} disabled={start.isPending} onChange={(event) => setConfirmed(event.target.checked)}>
-          {t("backup.confirm", { count: deleting, platform })}
+          {t(deleteForSelf && onlyForSelf > 0 ? "backup.confirmSomeForSelf" : "backup.confirm", { count: deleting, platform })}
         </CheckboxLabel>
       </div>
       {error && <Notice tone="fault">{error}</Notice>}

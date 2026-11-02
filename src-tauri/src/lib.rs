@@ -93,12 +93,13 @@ pub struct BuildRunRequest {
     pub filter: run_filters::FilterRequest,
 }
 
-/// What the person agreed to lose from the backup when starting a run.
+/// What the person agreed to when starting a run.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunConsent {
     allow_incomplete_backup: bool,
     allow_lost_files: bool,
+    allow_only_for_self: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -250,6 +251,7 @@ async fn dry_run(
         backup: true,
         allow_incomplete_backup: false,
         allow_lost_files: false,
+        allow_only_for_self: false,
     };
 
     let store = state.store.clone();
@@ -442,6 +444,7 @@ pub(crate) async fn execute_previewed_run(
         backup: true,
         allow_incomplete_backup: consent.allow_incomplete_backup,
         allow_lost_files: consent.allow_lost_files,
+        allow_only_for_self: consent.allow_only_for_self,
     };
 
     // Fire-and-forget on its own thread; the run outlives this command. The
@@ -469,6 +472,7 @@ pub(crate) async fn execute_previewed_run(
                     started_epoch_secs: started,
                     finished_epoch_secs: now_secs(),
                     deleted: outcome.deleted,
+                    deleted_only_for_self: outcome.deleted_only_for_self,
                     skipped: outcome.skipped,
                     failed: outcome.failed,
                 };

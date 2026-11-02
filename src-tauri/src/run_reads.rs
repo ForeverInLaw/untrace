@@ -27,6 +27,12 @@ pub struct PreviewSummary {
     backup_space: BackupSpace,
     /// Pending items the backup cannot hold in full; they go only with consent.
     backup_gaps: u64,
+    /// Pending items other people keep seeing; they go only with consent.
+    only_for_self: u64,
+    /// How many pending items need both of those agreements.
+    consents_overlap: u64,
+    /// Items in the set that the platform does not let this account delete.
+    undeletable: u64,
 }
 
 #[derive(Serialize)]
@@ -36,6 +42,7 @@ pub struct PreviewItem {
     created_at_secs: Option<i64>,
     text: Option<String>,
     protected: bool,
+    only_for_self: bool,
 }
 
 #[derive(Serialize)]
@@ -73,12 +80,16 @@ pub async fn preview_summary(
         })
         .collect();
     let backup_space = backup::backup_space(&state.backup_dir, &store.pending_media(&run_id)?)?;
+    let consents = store.pending_consents(&run_id)?;
     Ok(PreviewSummary {
         pending: counts.pending,
         protected: counts.protected,
         types,
         backup_space,
-        backup_gaps: store.pending_backup_gaps(&run_id)?,
+        backup_gaps: consents.backup_gaps,
+        only_for_self: consents.only_for_self,
+        consents_overlap: consents.both,
+        undeletable: counts.undeletable,
     })
 }
 
@@ -109,6 +120,7 @@ pub async fn preview_items(
             created_at_secs: row.created_at_secs,
             text: row.text,
             protected: row.protected,
+            only_for_self: row.only_for_self,
         })
         .collect())
 }
@@ -150,6 +162,8 @@ pub struct InterruptedRun {
     account_label: String,
     started_epoch_secs: i64,
     deleted: u64,
+    /// How many of `deleted` other people can still see.
+    deleted_only_for_self: u64,
 }
 
 /// Runs without a receipt that have a backup to open. A run still going is left out.
@@ -171,6 +185,7 @@ pub async fn list_interrupted_runs(
             account_label: run.account,
             started_epoch_secs: run.started_secs,
             deleted: run.deleted,
+            deleted_only_for_self: run.deleted_only_for_self,
         })
         .collect())
 }

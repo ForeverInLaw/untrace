@@ -134,6 +134,8 @@ export interface RunConsent {
   allowIncompleteBackup: boolean;
   /// The person agreed to delete items whose files the platform refuses to hand over.
   allowLostFiles: boolean;
+  /// The person agreed to delete items that only this account stops seeing.
+  allowOnlyForSelf: boolean;
 }
 
 export interface StartRunRequest extends BackupRequest {
@@ -162,6 +164,8 @@ export interface InterruptedRun {
   account_label: string;
   started_epoch_secs: number;
   deleted: number;
+  /// How many of `deleted` other people can still see.
+  deleted_only_for_self: number;
 }
 
 export interface UnsavedItem {
@@ -185,6 +189,12 @@ export interface PreviewSummary extends PreviewCounts {
   backup_space: { media: number; needed: number; available: number; fits: boolean };
   /// Pending items the backup cannot hold in full; they go only with consent.
   backup_gaps: number;
+  /// Pending items other people keep seeing; they go only with consent.
+  only_for_self: number;
+  /// How many pending items need both of those agreements.
+  consents_overlap: number;
+  /// Items in the set that the platform does not let this account delete.
+  undeletable: number;
 }
 
 export interface PreviewItem {
@@ -193,6 +203,7 @@ export interface PreviewItem {
   created_at_secs: number | null;
   text: string | null;
   protected: boolean;
+  only_for_self: boolean;
 }
 
 export interface PreviewItemsRequest {
@@ -210,6 +221,8 @@ export interface RunSummary {
   started_epoch_secs: number;
   finished_epoch_secs: number;
   deleted: number;
+  /// How many of `deleted` other people can still see. Absent when none.
+  deleted_only_for_self?: number;
   skipped: number;
   failed: number;
 }

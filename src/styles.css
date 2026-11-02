@@ -977,6 +977,15 @@ small {
   color: var(--safe);
 }
 
+.hint--reach {
+  color: var(--caution);
+}
+
+.row:hover .hint--reach,
+.row:focus-within .hint--reach {
+  display: none;
+}
+
 .hint--fault {
   color: var(--fault);
 }
