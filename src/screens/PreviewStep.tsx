@@ -113,7 +113,13 @@ function ItemsTable({ runId, filter, undeletable }: { runId: string; filter: Fil
       </table>
       {items.isSuccess && rows.length === 0 && (
         <p className="empty">
-          {t(filter.group === "protected" ? "preview.emptyProtected" : undeletable > 0 ? "preview.emptyUndeletable" : "preview.empty")}
+          {t(
+            filter.group === "protected"
+              ? "preview.emptyProtected"
+              : undeletable > 0 && filter.group === "all" && filter.type === null
+                ? "preview.emptyUndeletable"
+                : "preview.empty",
+          )}
         </p>
       )}
       {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
