@@ -1,10 +1,18 @@
-import { useInfiniteQuery, useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   api,
   type BuildRunRequest,
   type ConnectAccountRequest,
   type ContentType,
   type ProgressEvent,
+  type RunConsent,
   type StartRunRequest,
   type BackupRequest,
 } from "../lib/tauri";
@@ -44,6 +52,16 @@ export function usePreviewSummaryQuery(runId: string | null) {
     enabled: runId !== null,
     queryKey: ["preview", runId, "summary"],
     queryFn: () => api.previewSummary(runId ?? ""),
+  });
+}
+
+/// Space for the backup of what goes with the boxes as ticked. The last answer
+/// stays on screen while the next one loads.
+export function useBackupSpaceQuery(runId: string, consent: RunConsent) {
+  return useQuery({
+    queryKey: ["preview", runId, "backup-space", consent],
+    queryFn: () => api.previewBackupSpace(runId, consent),
+    placeholderData: keepPreviousData,
   });
 }
 

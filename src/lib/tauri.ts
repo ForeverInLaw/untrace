@@ -187,10 +187,16 @@ export interface UnsavedFiles {
   items: UnsavedItem[];
 }
 
+/// Bytes: the media going into the backup, what that takes on disk, what is free.
+export interface BackupSpace {
+  media: number;
+  needed: number;
+  available: number;
+  fits: boolean;
+}
+
 export interface PreviewSummary extends PreviewCounts {
   types: { content_type: ContentType; count: number }[];
-  /// Bytes: the media going into the backup, what that takes on disk, what is free.
-  backup_space: { media: number; needed: number; available: number; fits: boolean };
   /// Pending items the backup cannot hold in full; they go only with consent.
   backup_gaps: number;
   /// Pending items other people keep seeing; they go only with consent.
@@ -308,6 +314,8 @@ export const api = {
     }),
 
   previewSummary: (runId: string) => invoke<PreviewSummary>("preview_summary", { runId }),
+  previewBackupSpace: (runId: string, consent: RunConsent) =>
+    invoke<BackupSpace>("preview_backup_space", { runId, consent }),
   previewItems: (req: PreviewItemsRequest) => invoke<PreviewItem[]>("preview_items", { ...req }),
   setItemProtected: (runId: string, platformId: string, isProtected: boolean) =>
     invoke<boolean>("set_item_protected", { runId, platformId, protected: isProtected }),

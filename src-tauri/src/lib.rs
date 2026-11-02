@@ -26,7 +26,7 @@ use lethe_core::pipeline::{self, RunRequest};
 use lethe_core::scheduler::Scheduler;
 use lethe_core::{ProgressEvent, RunControl};
 use lethe_crypto::receipt::RunSummary;
-use lethe_store::{NewRun, Store};
+use lethe_store::{Consents, NewRun, Store};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 use tauri::ipc::Channel;
@@ -93,13 +93,23 @@ pub struct BuildRunRequest {
     pub filter: run_filters::FilterRequest,
 }
 
-/// What the person agreed to when starting a run.
+/// What the person agrees to delete with a run, beyond what goes without asking.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunConsent {
     allow_incomplete_backup: bool,
     allow_lost_files: bool,
     allow_only_for_self: bool,
+}
+
+/// The agreements that decide which waiting rows go with the run.
+impl From<RunConsent> for Consents {
+    fn from(consent: RunConsent) -> Self {
+        Self {
+            backup_gaps: consent.allow_incomplete_backup,
+            only_for_self: consent.allow_only_for_self,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -399,6 +409,10 @@ pub(crate) async fn execute_previewed_run(
     consent: RunConsent,
     on_event: Channel<ProgressEvent>,
 ) -> Result<(), CommandError> {
+    // Checked before the backup target, which writes key files for the run.
+    if !run_reads::backup_space_for(state, &run_id, consent).await?.fits {
+        return Err(CommandError::msg("not enough free disk space for the backup"));
+    }
     // Load keys/backup target up front: never start deleting what we cannot seal.
     let signer = secrets::receipt_signer()?;
     let backup = backup::backup_target(
@@ -408,10 +422,6 @@ pub(crate) async fn execute_previewed_run(
             .as_deref()
             .filter(|passphrase| !passphrase.is_empty()),
     )?;
-    let media = state.reader.lock().await.pending_media(&run_id)?;
-    if !backup::backup_space(&state.backup_dir, &media)?.fits {
-        return Err(CommandError::msg("not enough free disk space for the backup"));
-    }
 
     let started = now_secs();
     state
@@ -639,6 +649,7 @@ pub fn run() {
             resume_run,
             stop_run,
             run_reads::preview_summary,
+            run_reads::preview_backup_space,
             run_reads::preview_items,
             run_reads::set_item_protected,
             run_reads::list_receipts,
