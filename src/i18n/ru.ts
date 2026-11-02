@@ -228,6 +228,8 @@ export const ru = {
   "receipt.finished": "Конец",
   "receipt.deleted": "Удалено",
   "receipt.skipped": "Уже не было",
+  "receipt.keptOnlyForSelf": "Оставлено: удалилось бы только у вас",
+  "receipt.undeletable": "Удалить нельзя",
   "receipt.failed": "Ошибки",
   "receipt.backup": "Резервная копия",
   "receipt.backupUnchecked": "Ещё не проверена",

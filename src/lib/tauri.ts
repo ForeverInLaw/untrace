@@ -238,6 +238,10 @@ export interface RunSummary {
   deleted_only_for_self?: number;
   skipped: number;
   failed: number;
+  /// Items kept because only this account would have stopped seeing them. Absent when none.
+  kept_only_for_self?: number;
+  /// Items in the set the platform did not let this account delete. Absent when none.
+  undeletable?: number;
 }
 
 export interface Receipt {

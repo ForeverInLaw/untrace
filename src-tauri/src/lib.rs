@@ -25,7 +25,6 @@ use lethe_core::filter::FilterSpec;
 use lethe_core::pipeline::{self, RunRequest};
 use lethe_core::scheduler::Scheduler;
 use lethe_core::{ProgressEvent, RunControl};
-use lethe_crypto::receipt::RunSummary;
 use lethe_store::{Consents, NewRun, Store};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
@@ -475,17 +474,7 @@ pub(crate) async fn execute_previewed_run(
         .await
         {
             Ok(outcome) => {
-                let summary = RunSummary {
-                    run_id: run_req.run_id.clone(),
-                    platform: run_req.platform.clone(),
-                    account_label: run_req.account_label.clone(),
-                    started_epoch_secs: started,
-                    finished_epoch_secs: now_secs(),
-                    deleted: outcome.deleted,
-                    deleted_only_for_self: outcome.deleted_only_for_self,
-                    skipped: outcome.skipped,
-                    failed: outcome.failed,
-                };
+                let summary = outcome.summary(&run_req, started, now_secs());
                 pipeline::store_receipt(&guard, &signer, &summary)
                     .err()
                     .map(|e| e.to_string())
