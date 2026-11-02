@@ -11,9 +11,12 @@ import {
 const AUTH_KEY = ["telegram", "auth"] as const;
 const SCOPE_STATUS_KEY = ["telegram", "scope-status"] as const;
 
+/// Every own-message count; a deletion changes them without changing any chat's last message.
+export const OWN_COUNTS_KEY = ["telegram", "own-message-count"] as const;
+
 /// Counts of one account, or of one of its chats in every version seen so far.
 const ownCountKey = (account: string, chatId?: string) =>
-  ["telegram", "own-message-count", account, ...(chatId === undefined ? [] : [chatId])] as const;
+  [...OWN_COUNTS_KEY, account, ...(chatId === undefined ? [] : [chatId])] as const;
 
 /// Sign-in state alone; it answers at once, without waiting for the chat list.
 export function useTelegramAuthStatusQuery() {

@@ -8,7 +8,7 @@ import {
   type StartRunRequest,
   type BackupRequest,
 } from "../lib/tauri";
-import { useSessionRefresh } from "./telegram";
+import { OWN_COUNTS_KEY, useSessionRefresh } from "./telegram";
 
 const PREVIEW_PAGE_SIZE = 100;
 const RECEIPT_POLL_MS = 500;
@@ -115,6 +115,9 @@ export function useStartRunMutation(platformId: string, onEvent: (event: Progres
     mutationKey: ["runs", "start"],
     mutationFn: (req: StartRunRequest) =>
       platformId === "telegram" ? api.telegramStartRun(req, handleEvent) : api.startRun(req, handleEvent),
+    // Even a stopped run may have deleted some messages.
+    onSettled: () =>
+      platformId === "telegram" ? queryClient.invalidateQueries({ queryKey: OWN_COUNTS_KEY }) : undefined,
   });
 }
 
