@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, CheckboxLabel, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
@@ -20,6 +20,21 @@ function usePeriodLabel() {
     return t("backup.periodFrom", { date: format.calendarDay(dateFrom) });
   }
   return dateTo ? t("backup.periodTo", { date: format.calendarDay(dateTo) }) : t("backup.periodAll");
+}
+
+interface ConsentBoxProps {
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}
+
+function ConsentBox({ checked, disabled, onChange, children }: ConsentBoxProps) {
+  return (
+    <CheckboxLabel checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)}>
+      {children}
+    </CheckboxLabel>
+  );
 }
 
 export function BackupStep() {
@@ -52,6 +67,12 @@ export function BackupStep() {
   const error = errorMessage(start.error ?? summaryQuery.error);
   const formatBytes = useByteFormat();
   const space = summary?.backup_space;
+
+  // Changing what goes also changes the count that was confirmed.
+  const consentTo = (set: (allowed: boolean) => void) => (allowed: boolean) => {
+    set(allowed);
+    setConfirmed(false);
+  };
 
   const onStart = async () => {
     await start.mutateAsync({
@@ -119,31 +140,17 @@ export function BackupStep() {
       {onlyForSelf > 0 && <Notice tone="caution">{t("backup.onlyForSelfNotice", { count: onlyForSelf })}</Notice>}
       <div className="confirm">
         {gaps > 0 && (
-          <CheckboxLabel
-            checked={deleteIncomplete}
-            disabled={start.isPending}
-            onChange={(event) => {
-              setDeleteIncomplete(event.target.checked);
-              setConfirmed(false);
-            }}
-          >
+          <ConsentBox checked={deleteIncomplete} disabled={start.isPending} onChange={consentTo(setDeleteIncomplete)}>
             {t("backup.gapConfirm", { count: gaps })}
-          </CheckboxLabel>
+          </ConsentBox>
         )}
         {onlyForSelf > 0 && (
-          <CheckboxLabel
-            checked={deleteForSelf}
-            disabled={start.isPending}
-            onChange={(event) => {
-              setDeleteForSelf(event.target.checked);
-              setConfirmed(false);
-            }}
-          >
+          <ConsentBox checked={deleteForSelf} disabled={start.isPending} onChange={consentTo(setDeleteForSelf)}>
             {t("backup.onlyForSelfConfirm", { count: onlyForSelf })}
-          </CheckboxLabel>
+          </ConsentBox>
         )}
         <CheckboxLabel checked={confirmed} disabled={start.isPending} onChange={(event) => setConfirmed(event.target.checked)}>
-          {t("backup.confirm", { count: deleting, platform })}
+          {t(deleteForSelf && onlyForSelf > 0 ? "backup.confirmSomeForSelf" : "backup.confirm", { count: deleting, platform })}
         </CheckboxLabel>
       </div>
       {error && <Notice tone="fault">{error}</Notice>}

@@ -106,9 +106,6 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
             <div><dt>{t("receipt.started")}</dt><dd>{format.moment(summary.started_epoch_secs)}</dd></div>
             <div><dt>{t("receipt.finished")}</dt><dd>{format.moment(summary.finished_epoch_secs)}</dd></div>
             <div><dt>{t("receipt.deleted")}</dt><dd>{t("cleanup.plainNumber", { value: summary.deleted })}</dd></div>
-            {onlyForSelf > 0 && (
-              <div><dt>{t("preview.onlyForSelf")}</dt><dd>{t("cleanup.plainNumber", { value: onlyForSelf })}</dd></div>
-            )}
             <div><dt>{t("receipt.skipped")}</dt><dd>{t("cleanup.plainNumber", { value: summary.skipped })}</dd></div>
             <div>
               <dt>{t("receipt.failed")}</dt>

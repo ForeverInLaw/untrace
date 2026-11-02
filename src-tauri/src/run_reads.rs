@@ -162,6 +162,8 @@ pub struct InterruptedRun {
     account_label: String,
     started_epoch_secs: i64,
     deleted: u64,
+    /// How many of `deleted` other people can still see.
+    deleted_only_for_self: u64,
 }
 
 /// Runs without a receipt that have a backup to open. A run still going is left out.
@@ -183,6 +185,7 @@ pub async fn list_interrupted_runs(
             account_label: run.account,
             started_epoch_secs: run.started_secs,
             deleted: run.deleted,
+            deleted_only_for_self: run.deleted_only_for_self,
         })
         .collect())
 }

@@ -13,6 +13,11 @@ import {
 } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 
+function useCount() {
+  const { t } = useTranslation();
+  return (value: number) => t("cleanup.plainNumber", { value });
+}
+
 type Filter = { kind: "all" } | { kind: "type"; type: ContentType } | { kind: "protected" };
 
 function ItemRow({ item, runId }: { item: PreviewItem; runId: string }) {
@@ -52,7 +57,7 @@ function ItemRow({ item, runId }: { item: PreviewItem; runId: string }) {
   );
 }
 
-function ItemsTable({ runId, filter }: { runId: string; filter: Filter }) {
+function ItemsTable({ runId, filter, undeletable }: { runId: string; filter: Filter; undeletable: number }) {
   const { t } = useTranslation();
   const items = usePreviewItemsQuery(
     runId,
@@ -79,7 +84,9 @@ function ItemsTable({ runId, filter }: { runId: string; filter: Filter }) {
         </tbody>
       </table>
       {items.isSuccess && rows.length === 0 && (
-        <p className="empty">{t(filter.kind === "protected" ? "preview.emptyProtected" : "preview.empty")}</p>
+        <p className="empty">
+          {t(filter.kind === "protected" ? "preview.emptyProtected" : undeletable > 0 ? "preview.emptyUndeletable" : "preview.empty")}
+        </p>
       )}
       {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
       {items.hasNextPage && (
@@ -100,7 +107,7 @@ function DeleteReachFacts({ summary }: { summary: PreviewSummary }) {
   if (onlyForSelf === 0 && undeletable === 0) {
     return null;
   }
-  const count = (value: number) => t("cleanup.plainNumber", { value });
+  const count = useCount();
   return (
     <section>
       <dl className="facts facts--compact">
@@ -123,7 +130,7 @@ export function PreviewStep() {
   const saving = useIsSavingProtection(runId);
   const pending = summary?.pending ?? 0;
   const protectedCount = summary?.protected ?? 0;
-  const count = (value: number) => t("cleanup.plainNumber", { value });
+  const count = useCount();
 
   return (
     <Screen
@@ -167,7 +174,7 @@ export function PreviewStep() {
           {t("preview.protected")} <span>{count(protectedCount)}</span>
         </button>
       </fieldset>
-      <ItemsTable filter={filter} runId={runId} />
+      <ItemsTable filter={filter} runId={runId} undeletable={summary?.undeletable ?? 0} />
     </Screen>
   );
 }

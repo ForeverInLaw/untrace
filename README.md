@@ -9,7 +9,7 @@ The project is in early alpha. The Bluesky path works end to end and has passed 
 cleanup, with a post's text and files in the backup. Telegram works behind feature flags and has passed live runs on a test group, with
 media files in the backup. Each item also goes in whole, as the platform returned it, so
 polls, contacts, alt text and links are kept. An item the platform does not fully hand
-over is deleted only after a separate confirmation. A backup can be exported into a plain, unencrypted folder of text and files, including the backup of a run that was stopped or crashed. An item whose file could not be saved stays on the platform and is listed on the receipt, where it can be tried again, or deleted without the file after a separate confirmation if the platform refuses to hand the file over. The app lists only the services that work in the current build, in Russian
+over is deleted only after a separate confirmation. A backup can be exported into a plain, unencrypted folder of text and files, including the backup of a run that was stopped or crashed. An item whose file could not be saved stays on the platform and is listed on the receipt, where it can be tried again, or deleted without the file after a separate confirmation if the platform refuses to hand the file over. A Telegram message other people would keep seeing stays unless you agree to delete it only for yourself, and the receipt counts those apart. The app lists only the services that work in the current build, in Russian
 or English.
 
 ## Building

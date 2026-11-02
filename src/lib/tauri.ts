@@ -164,6 +164,8 @@ export interface InterruptedRun {
   account_label: string;
   started_epoch_secs: number;
   deleted: number;
+  /// How many of `deleted` other people can still see.
+  deleted_only_for_self: number;
 }
 
 export interface UnsavedItem {
