@@ -114,6 +114,7 @@ export function BackupStep() {
         {gaps > 0 && (
           <CheckboxLabel
             checked={deleteIncomplete}
+            disabled={start.isPending}
             onChange={(event) => {
               setDeleteIncomplete(event.target.checked);
               setConfirmed(false);
@@ -122,7 +123,7 @@ export function BackupStep() {
             {t("backup.gapConfirm", { count: gaps })}
           </CheckboxLabel>
         )}
-        <CheckboxLabel checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}>
+        <CheckboxLabel checked={confirmed} disabled={start.isPending} onChange={(event) => setConfirmed(event.target.checked)}>
           {t("backup.confirm", { count: deleting, platform })}
         </CheckboxLabel>
       </div>
