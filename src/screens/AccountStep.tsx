@@ -162,9 +162,9 @@ function TelegramConnect() {
   const label = auth?.account_label ?? "Telegram";
   const signingIn = phase === "wait_code" || phase === "wait_password";
   // TDLib takes the API pair once per client, so after that only the phone can change.
-  const keyTaken = signingIn || phase === "wait_phone_number";
+  const keyTaken = signingIn || phase === "wait_phone_number" || phase === "wait_other_device_confirmation";
   const needsSecret = signingIn && !changingDetails;
-  const pending = start.isPending || code.isPending || password.isPending;
+  const pending = start.isPending || code.isPending || password.isPending || logOut.isPending;
   const failure =
     errorMessage(start.error ?? code.error ?? password.error ?? logOut.error ?? status.error) ??
     (phase === "error" ? auth?.message : null);
@@ -261,7 +261,7 @@ function TelegramConnect() {
             {phase === "wait_phone_number" && (
               <ConfirmButton
                 confirmLabel={t("account.telegram.confirmChangeKey")}
-                disabled={pending || logOut.isPending}
+                disabled={pending}
                 onConfirm={() => logOut.mutate({ platform: "telegram", label })}
               >
                 {t("account.telegram.changeKey")}

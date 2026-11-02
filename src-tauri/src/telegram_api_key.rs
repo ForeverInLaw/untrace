@@ -92,12 +92,15 @@ impl<V: ApiKeyVault> ApiKeyKeeper<V> {
         *self.entered_key() = Some(key);
     }
 
+    /// Saves the entered pair; one the keychain refused stays here for the next try.
     pub fn signed_in(&self) -> Result<(), CommandError> {
-        match self.entered_key().take() {
-            Some(key) => self.vault.save(&key),
-            // A resumed session: the saved pair is the one in use.
-            None => Ok(()),
+        let mut entered = self.entered_key();
+        // None means a resumed session: the saved pair is the one in use.
+        if let Some(key) = entered.as_ref() {
+            self.vault.save(key)?;
+            *entered = None;
         }
+        Ok(())
     }
 
     pub fn signed_out(&self) -> Result<(), CommandError> {
@@ -117,18 +120,24 @@ mod tests {
     use super::*;
 
     #[derive(Default)]
-    struct MemoryVault(Mutex<Option<ApiKey>>);
+    struct MemoryVault {
+        key: Mutex<Option<ApiKey>>,
+        refuses_saves: Mutex<bool>,
+    }
 
     impl ApiKeyVault for MemoryVault {
         fn load(&self) -> Result<Option<ApiKey>, CommandError> {
-            Ok(self.0.lock().unwrap().clone())
+            Ok(self.key.lock().unwrap().clone())
         }
         fn save(&self, key: &ApiKey) -> Result<(), CommandError> {
-            *self.0.lock().unwrap() = Some(key.clone());
+            if *self.refuses_saves.lock().unwrap() {
+                return Err(CommandError::msg("keychain is locked"));
+            }
+            *self.key.lock().unwrap() = Some(key.clone());
             Ok(())
         }
         fn forget(&self) -> Result<(), CommandError> {
-            *self.0.lock().unwrap() = None;
+            *self.key.lock().unwrap() = None;
             Ok(())
         }
     }
@@ -173,6 +182,18 @@ mod tests {
         keeper.entered(key(2));
         keeper.signed_in().unwrap();
         assert_eq!(keeper.key_to_resume().unwrap(), Some(key(2)));
+    }
+
+    #[test]
+    fn a_key_the_keychain_refused_is_saved_on_the_next_try() {
+        let keeper = ApiKeyKeeper::new(MemoryVault::default());
+        keeper.entered(key(1));
+        *keeper.vault.refuses_saves.lock().unwrap() = true;
+        assert!(keeper.signed_in().is_err());
+
+        *keeper.vault.refuses_saves.lock().unwrap() = false;
+        keeper.signed_in().unwrap();
+        assert_eq!(keeper.key_to_resume().unwrap(), Some(key(1)));
     }
 
     #[test]

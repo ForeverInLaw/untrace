@@ -212,6 +212,11 @@ impl TelegramState {
             Some(client) if matches!(status.phase, TelegramAuthPhase::Ready) && !identified => {
                 self.settled_status(client).await
             }
+            Some(_) if matches!(status.phase, TelegramAuthPhase::Ready) => {
+                // Saves a key the keychain refused at sign-in.
+                self.api_key.signed_in()?;
+                Ok(status)
+            }
             _ => Ok(status),
         }
     }
@@ -257,17 +262,26 @@ impl TelegramState {
             return self.api_key.signed_out();
         };
         self.close_client(client).await?;
+        // Until the folder is gone the closed client stays, so another try removes it.
+        match std::fs::remove_dir_all(&self.root_dir) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+            _ => {}
+        }
         *self.inner.lock().await = TelegramInner::default();
         *self.resume_failure.lock().await = None;
-        let removed = match std::fs::remove_dir_all(&self.root_dir) {
-            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
-            _ => Ok(()),
-        };
-        self.api_key.signed_out()?;
-        removed
+        self.api_key.signed_out()
     }
 
     async fn close_client(&self, client: TdlibClientId) -> Result<(), CommandError> {
+        let closed = self
+            .auth_states
+            .lock()
+            .await
+            .get(&client.raw())
+            .is_some_and(|status| matches!(status.phase, TelegramAuthPhase::Closed));
+        if closed {
+            return Ok(());
+        }
         let state = functions::get_authorization_state(client.raw())
             .await
             .map_err(map_tdlib_error)?;
@@ -435,6 +449,8 @@ pub async fn telegram_auth_start(
         return Err(CommandError::msg("Telegram phone number is required"));
     }
     state.resumed().await;
+    // A sign-out in progress finishes first, so this does not start on a closing client.
+    drop(state.signing_out.lock().await);
     state.resume_failure.lock().await.take();
 
     let (client, status) = state.started_client().await?;
