@@ -1,6 +1,8 @@
 //! Read models and small edits for the UI. A run holds `AppState::store` until it
 //! finishes, so everything here goes through the separate `reader` connection.
 
+use std::collections::HashSet;
+
 use lethe_adapter::ContentType;
 use lethe_crypto::receipt::RunSummary;
 use lethe_store::{ItemQuery, StoredReceipt};
@@ -138,6 +140,39 @@ pub async fn get_receipt(
 ) -> Result<Option<ReceiptView>, CommandError> {
     let stored = state.reader.lock().await.receipt(&run_id)?;
     stored.map(ReceiptView::try_from).transpose()
+}
+
+/// A run that ended without a receipt, for reaching its backup.
+#[derive(Debug, Serialize)]
+pub struct InterruptedRun {
+    run_id: String,
+    platform: String,
+    account_label: String,
+    started_epoch_secs: i64,
+    deleted: u64,
+}
+
+/// Runs without a receipt that have a backup to open. A run still going is left out.
+#[tauri::command]
+pub async fn list_interrupted_runs(
+    state: State<'_, AppState>,
+) -> Result<Vec<InterruptedRun>, CommandError> {
+    let running: HashSet<String> = state.controls.lock().await.keys().cloned().collect();
+    let runs = state.reader.lock().await.runs_without_receipt()?;
+    Ok(runs
+        .into_iter()
+        .filter(|run| {
+            !running.contains(&run.run_id)
+                && backup::backup_path(&state.backup_dir, &run.run_id).exists()
+        })
+        .map(|run| InterruptedRun {
+            run_id: run.run_id,
+            platform: run.platform,
+            account_label: run.account,
+            started_epoch_secs: run.started_secs,
+            deleted: run.deleted,
+        })
+        .collect())
 }
 
 #[tauri::command]

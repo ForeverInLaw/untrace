@@ -125,7 +125,7 @@ export function RunStep() {
         )
       }
       heading={<RunHeading />}
-      note={t("run.note")}
+      note={t(status === "error" ? "run.failedNote" : "run.note")}
     >
       <progress aria-label={t("run.progressLabel")} className="meter" max={Math.max(total, 1)} value={handled} />
       <Counters />

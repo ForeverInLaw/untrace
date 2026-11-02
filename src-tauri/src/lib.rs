@@ -28,6 +28,7 @@ use lethe_core::{ProgressEvent, RunControl};
 use lethe_crypto::receipt::RunSummary;
 use lethe_store::{NewRun, Store};
 use serde::{Deserialize, Serialize};
+use tauri_plugin_dialog::DialogExt;
 use tauri::ipc::Channel;
 use tauri::{async_runtime, Manager, State};
 use tokio::sync::Mutex;
@@ -430,13 +431,35 @@ async fn verify_backup(
     run_id: String,
     backup_passphrase: Option<String>,
 ) -> Result<backup::BackupVerification, CommandError> {
-    backup::verify_backup(
-        &state.backup_dir,
-        &run_id,
-        backup_passphrase
-            .as_deref()
-            .filter(|passphrase| !passphrase.is_empty()),
-    )
+    backup::verify_backup(&state.backup_dir, &run_id, backup_passphrase.as_deref())
+}
+
+/// Off the async runtime, because decrypting a large backup takes a while and the
+/// folder dialog blocks until the person answers.
+#[tauri::command]
+async fn export_backup(
+    window: tauri::Window,
+    state: State<'_, AppState>,
+    run_id: String,
+    backup_passphrase: Option<String>,
+) -> Result<Option<backup::BackupExport>, CommandError> {
+    let backup_dir = state.backup_dir.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        backup::export_backup(
+            &backup_dir,
+            &run_id,
+            backup_passphrase.as_deref(),
+            || {
+                let folder = window
+                    .dialog()
+                    .file()
+                    .set_parent(&window)
+                    .blocking_pick_folder();
+                Ok(folder.map(|folder| folder.into_path()).transpose()?)
+            },
+        )
+    })
+    .await?
 }
 
 #[tauri::command]
@@ -473,6 +496,7 @@ fn now_secs() -> u64 {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let pds_host = std::env::var("LETHE_PDS_HOST").unwrap_or_else(|_| "bsky.social".into());
 
@@ -526,6 +550,7 @@ pub fn run() {
             dry_run,
             start_run,
             verify_backup,
+            export_backup,
             pause_run,
             resume_run,
             stop_run,
@@ -534,6 +559,7 @@ pub fn run() {
             run_reads::set_item_protected,
             run_reads::list_receipts,
             run_reads::get_receipt,
+            run_reads::list_interrupted_runs,
             run_reads::list_accounts,
             run_reads::disconnect_account,
         ])

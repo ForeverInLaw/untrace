@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { Seal } from "../components/Seal";
-import { Button, Notice, Screen, TextField } from "../components/ui";
+import { Button, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
-import { useReceiptQuery, useReceiptsQuery, useVerifyBackupMutation } from "../queries/runs";
+import { useExportBackupMutation, useReceiptQuery, useReceiptsQuery, useVerifyBackupMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { useRunStore } from "../stores/runStore";
+import { BackupExportResult, BackupPassphraseField, ExportBackupButton, useBackupPassphrase } from "./BackupExport";
 
 const SEAL_SIZE = 280;
 
@@ -30,7 +31,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   const queryClient = useQueryClient();
   const flowPassphrase = useFlowStore((s) => s.passphrase);
   const runFailure = useRunStore((s) => s.message);
-  const [passphrase, setPassphrase] = useState(flowPassphrase);
+  const { passphrase, setPassphrase, backupPassphrase } = useBackupPassphrase(flowPassphrase);
   const receiptQuery = useReceiptQuery(runId);
   const receipt = receiptQuery.data;
   const receipts = useReceiptsQuery().data ?? [];
@@ -44,6 +45,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
     mutationFn: (signature: string) => navigator.clipboard.writeText(signature),
   });
   const hasReceipt = Boolean(receipt);
+  const exportBackup = useExportBackupMutation();
 
   // The list in the sidebar learns about the new receipt once it has landed.
   useEffect(() => {
@@ -55,11 +57,12 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   const actions = (
     <>
       <Button kind={verified ? "primary" : "secondary"} onClick={exit.onClick}>{exit.label}</Button>
+      <ExportBackupButton backupPassphrase={backupPassphrase} disabled={!receipt} mutation={exportBackup} runId={runId} />
       {!verified && (
         <Button
           disabled={!receipt || verify.isPending}
           kind="primary"
-          onClick={() => verify.mutate({ runId, backupPassphrase: passphrase.length > 0 ? passphrase : null })}
+          onClick={() => verify.mutate({ runId, backupPassphrase })}
         >
           {t("receipt.verify")}
         </Button>
@@ -124,19 +127,9 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
               </dd>
             </div>
           </dl>
-          {verifyFailed && (
-            <>
-              <TextField
-                autoComplete="off"
-                className="field--wide receipt__passphrase"
-                label={t("receipt.passphrase")}
-                onChange={(event) => setPassphrase(event.target.value)}
-                type="password"
-                value={passphrase}
-              />
-              {verify.isError && <Notice tone="fault">{errorMessage(verify.error)}</Notice>}
-            </>
-          )}
+          {(verifyFailed || exportBackup.isError) && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
+          {verify.isError && <Notice tone="fault">{errorMessage(verify.error)}</Notice>}
+          <BackupExportResult mutation={exportBackup} />
         </div>
         <figure className="receipt__seal">
           <Seal runId={runId} size={SEAL_SIZE} />

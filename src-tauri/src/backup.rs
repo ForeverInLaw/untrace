@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use lethe_core::archive::audit_archive;
+use lethe_core::archive::{audit_archive, ArchiveExport};
 use lethe_core::pipeline::BackupTarget;
 use lethe_crypto::container::{derive_data_key, ContainerReader, ContainerWriter};
 use lethe_crypto::DataKey;
@@ -19,6 +19,16 @@ pub struct BackupVerification {
     pub ok: bool,
     pub items: u64,
     pub media_files: u64,
+}
+
+/// What an export left in the folder the person chose.
+#[derive(Debug, Serialize)]
+pub struct BackupExport {
+    pub folder: String,
+    pub items: u64,
+    pub media_files: u64,
+    pub complete: bool,
+    pub partial_file: Option<String>,
 }
 
 /// Whether the disk can hold a run's backup, in bytes.
@@ -79,25 +89,57 @@ pub fn verify_backup(
     run_id: &str,
     backup_passphrase: Option<&str>,
 ) -> Result<BackupVerification, CommandError> {
-    let path = backup_path(base_dir, run_id);
-    let key = match backup_passphrase {
-        Some(passphrase) => unwrap_passphrase_backup_key(&path, passphrase)?,
-        None => backup_data_key()?,
-    };
-    let file = fs::File::open(&path)
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                CommandError::msg("backup archive not found; start the run first")
-            } else {
-                e.into()
-            }
-        })?;
+    let (file, key) = open_backup(base_dir, run_id, backup_passphrase)?;
     let audit = audit_archive(file, &key)?;
     Ok(BackupVerification {
         ok: true,
         items: audit.items,
         media_files: audit.media_files,
     })
+}
+
+/// Exports a backup into a new folder under the one `pick_folder` returns. The key
+/// is checked first, so a wrong passphrase never gets as far as asking where to
+/// export. `None` means the person cancelled the choice.
+pub fn export_backup(
+    base_dir: &Path,
+    run_id: &str,
+    backup_passphrase: Option<&str>,
+    pick_folder: impl FnOnce() -> Result<Option<PathBuf>, CommandError>,
+) -> Result<Option<BackupExport>, CommandError> {
+    let (file, key) = open_backup(base_dir, run_id, backup_passphrase)?;
+    let archive = ArchiveExport::open(file, &key)?;
+    let Some(parent) = pick_folder()? else {
+        return Ok(None);
+    };
+    let report = archive.write_to(&parent, &format!("untrace-export-{run_id}"))?;
+    Ok(Some(BackupExport {
+        folder: report.folder.to_string_lossy().into_owned(),
+        items: report.items,
+        media_files: report.media_files,
+        complete: report.complete,
+        partial_file: report.partial_file,
+    }))
+}
+
+fn open_backup(
+    base_dir: &Path,
+    run_id: &str,
+    backup_passphrase: Option<&str>,
+) -> Result<(fs::File, DataKey), CommandError> {
+    let path = backup_path(base_dir, run_id);
+    let key = match backup_passphrase.filter(|passphrase| !passphrase.is_empty()) {
+        Some(passphrase) => unwrap_passphrase_backup_key(&path, passphrase)?,
+        None => backup_data_key()?,
+    };
+    let file = fs::File::open(&path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            CommandError::msg("backup archive not found; start the run first")
+        } else {
+            e.into()
+        }
+    })?;
+    Ok((file, key))
 }
 
 fn backup_data_key() -> Result<DataKey, CommandError> {
@@ -211,16 +253,83 @@ mod tests {
         assert!(!BackupSpace::new(&media, 1_699).fits);
     }
 
-    #[test]
-    fn passphrase_backup_roundtrip_verifies_items() {
+    fn test_dir(label: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "untrace-backup-test-{}",
+            "untrace-{label}-test-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos()
         ));
         fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A sealed backup with one item and one file.
+    fn write_backup(dir: &Path, passphrase: &str) {
+        let target = backup_target(dir, "r1", Some(passphrase)).unwrap();
+        let mut writer =
+            ContainerWriter::create(fs::File::create(&target.path).unwrap(), &target.key).unwrap();
+        writer.write_chunk(br#"{"run_id":"r1"}"#).unwrap();
+        writer
+            .write_chunk(
+                br#"{"platform_id":"1","text":"hi","media":[{"url":"u","file_name":"a.txt","archived_bytes":3,"chunks":1}]}"#,
+            )
+            .unwrap();
+        writer.write_chunk(b"abc").unwrap();
+        writer.finish().unwrap();
+    }
+
+    #[test]
+    fn export_writes_a_folder_where_the_person_chose() {
+        let dir = test_dir("export");
+        let chosen = dir.join("chosen");
+        fs::create_dir(&chosen).unwrap();
+        write_backup(&dir, "correct horse");
+
+        let done = export_backup(&dir, "r1", Some("correct horse"), || Ok(Some(chosen.clone())))
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(done.items, 1);
+        assert_eq!(done.media_files, 1);
+        assert!(done.complete);
+        let folder = chosen.join("untrace-export-r1");
+        assert_eq!(done.folder, folder.to_string_lossy());
+        assert_eq!(fs::read(folder.join("files/a.txt")).unwrap(), b"abc");
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_wrong_passphrase_fails_before_the_person_picks_a_folder() {
+        let dir = test_dir("export-wrong");
+        write_backup(&dir, "correct horse");
+
+        let result = export_backup(&dir, "r1", Some("wrong horse"), || -> Result<_, CommandError> {
+            panic!("asked for a folder with a wrong passphrase")
+        });
+
+        assert!(result.is_err());
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn cancelling_the_folder_choice_writes_nothing() {
+        let dir = test_dir("export-cancel");
+        write_backup(&dir, "correct horse");
+        let before = fs::read_dir(&dir).unwrap().count();
+
+        let done = export_backup(&dir, "r1", Some("correct horse"), || Ok(None)).unwrap();
+
+        assert!(done.is_none());
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), before);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn passphrase_backup_roundtrip_verifies_items() {
+        let dir = test_dir("backup");
 
         let target = backup_target(&dir, "r1", Some("correct horse")).unwrap();
         let mut writer =

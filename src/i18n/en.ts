@@ -159,7 +159,14 @@ export const en = {
   "run.resume": "Resume",
   "run.stop": "Stop",
   "run.failedHeading": "The cleanup was interrupted",
+  "run.failedNote": "Anything it already deleted is in its backup, under Receipts.",
   "run.progressLabel": "Deletion progress",
+
+  "backup.export": "Export backup",
+  "backup.exporting": "Exporting…",
+  "backup.exported": "Saved to {{folder}}. Items: {{items, number}}, files: {{files, number}}. This folder is not encrypted.",
+  "backup.exportCutOff": "The backup breaks off, so this is everything it held up to that point.",
+  "backup.exportPartialFile": "{{file}} is cut short and kept as it is.",
 
   "receipt.heading_one": "Done: <n>{{count, number}}</n> item deleted",
   "receipt.heading_other": "Done: <n>{{count, number}}</n> items deleted",
@@ -185,6 +192,8 @@ export const en = {
   "receipt.newCleanup": "New cleanup",
 
   "receipts.heading": "Receipts",
+  "receipts.interrupted": "Interrupted",
+  "receipts.interruptedLead": "This cleanup has no receipt because it did not finish. What it deleted so far is in the backup.",
   "receipts.empty": "No receipts yet. One appears after your first cleanup.",
   "receipts.back": "All receipts",
   "receipts.date": "Date",
