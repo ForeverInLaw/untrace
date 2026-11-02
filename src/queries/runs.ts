@@ -125,12 +125,18 @@ interface RetryUnsavedFiles {
 
 /// Starts a follow-up run for what stayed, and resolves to its id. Whatever is in it
 /// that the backup cannot hold in full, the person already agreed to in the first run.
-export function useRetryUnsavedFilesMutation(platformId: string, onEvent: (event: ProgressEvent) => void) {
+/// `onOpened` runs once the engine has accepted it, just before it starts.
+export function useRetryUnsavedFilesMutation(
+  platformId: string,
+  onEvent: (event: ProgressEvent) => void,
+  onOpened: () => void,
+) {
   const start = useStartRunMutation(platformId, onEvent);
   return useMutation({
     mutationKey: ["runs", "retry-unsaved"],
     mutationFn: async ({ runId, backupPassphrase, allowLostFiles }: RetryUnsavedFiles) => {
       const { run_id: retryId } = await api.retryUnsavedFiles(runId);
+      onOpened();
       try {
         await start.mutateAsync({
           runId: retryId,

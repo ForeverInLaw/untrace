@@ -28,7 +28,7 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
   const [allowLostFiles, setAllowLostFiles] = useState(false);
   const unsavedQuery = useUnsavedFilesQuery(runId);
   const unsaved = unsavedQuery.data;
-  const retry = useRetryUnsavedFilesMutation(platformId, apply);
+  const retry = useRetryUnsavedFilesMutation(platformId, apply, resetRun);
 
   if (unsavedQuery.isError) {
     return <Notice tone="fault">{errorMessage(unsavedQuery.error)}</Notice>;
@@ -40,7 +40,6 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
   const hidden = unsaved.total - unsaved.items.length;
 
   const onRetry = () => {
-    resetRun();
     retry.mutate(
       { runId, backupPassphrase, allowLostFiles },
       { onSuccess: (retryId) => retryStarted({ runId: retryId, platformId, account, passphrase }) },

@@ -45,6 +45,7 @@ const STORE_FILE: &str = "untrace.db";
 const BACKUP_DIR: &str = "backups";
 const SESSION_DIR: &str = "sessions";
 const TELEGRAM_DIR: &str = "telegram";
+const ANOTHER_RUN_IS_LIVE: &str = "another cleanup is still running";
 
 pub struct AppState {
     pub egress: Arc<lethe_net::Egress>,
@@ -336,6 +337,9 @@ async fn retry_unsaved_files(
     state: State<'_, AppState>,
     run_id: String,
 ) -> Result<DryRunResult, CommandError> {
+    if !state.controls.lock().await.is_empty() {
+        return Err(CommandError::msg(ANOTHER_RUN_IS_LIVE));
+    }
     let retry_id = format!("retry-{}", now_secs());
     let retry = state
         .reader
@@ -363,6 +367,20 @@ async fn retry_unsaved_files(
 async fn discard_retry(state: State<'_, AppState>, run_id: String) -> Result<(), CommandError> {
     state.pending.lock().await.remove(&run_id);
     state.reader.lock().await.discard_retry(&run_id)?;
+    Ok(())
+}
+
+/// One run at a time: a second one would wait on the store while its progress
+/// overwrites what the screen shows for the first.
+fn claim_run_slot(
+    controls: &mut HashMap<String, RunControl>,
+    run_id: &str,
+    control: RunControl,
+) -> Result<(), CommandError> {
+    if !controls.is_empty() {
+        return Err(CommandError::msg(ANOTHER_RUN_IS_LIVE));
+    }
+    controls.insert(run_id.to_owned(), control);
     Ok(())
 }
 
@@ -401,11 +419,7 @@ pub(crate) async fn execute_previewed_run(
         .set_run_started(&run_id, started as i64)?;
 
     let control = RunControl::new();
-    state
-        .controls
-        .lock()
-        .await
-        .insert(run_id.clone(), control.clone());
+    claim_run_slot(&mut *state.controls.lock().await, &run_id, control.clone())?;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<ProgressEvent>();
     // Forward engine events to the frontend channel until the run drops `tx`.
@@ -619,4 +633,21 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Untrace");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_second_run_is_refused_until_the_first_ends() {
+        let mut controls = HashMap::new();
+
+        claim_run_slot(&mut controls, "first", RunControl::new()).unwrap();
+        assert!(claim_run_slot(&mut controls, "second", RunControl::new()).is_err());
+        assert!(!controls.contains_key("second"));
+
+        controls.remove("first");
+        claim_run_slot(&mut controls, "second", RunControl::new()).unwrap();
+    }
 }
