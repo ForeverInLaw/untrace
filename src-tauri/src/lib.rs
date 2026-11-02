@@ -591,6 +591,8 @@ pub fn run() {
             fs::create_dir_all(&session_dir)?;
             fs::create_dir_all(&telegram_dir)?;
             let store = open_app_store(app)?;
+            // No run is previewed or under way yet, so what none can use goes now.
+            store.forget_stale_runs()?;
             let reader = open_app_store(app)?;
 
             app.manage(AppState {
