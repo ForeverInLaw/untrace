@@ -200,6 +200,8 @@ export const en = {
   "receipt.finished": "Finished",
   "receipt.deleted": "Deleted",
   "receipt.skipped": "Already gone",
+  "receipt.keptOnlyForSelf": "Kept: would go only for you",
+  "receipt.undeletable": "Can't be deleted",
   "receipt.failed": "Errors",
   "receipt.backup": "Backup",
   "receipt.backupUnchecked": "Not checked yet",

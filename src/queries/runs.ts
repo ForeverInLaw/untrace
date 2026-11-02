@@ -11,6 +11,7 @@ import {
   type BuildRunRequest,
   type ConnectAccountRequest,
   type ContentType,
+  type ItemGroup,
   type ProgressEvent,
   type RunConsent,
   type StartRunRequest,
@@ -65,12 +66,12 @@ export function useBackupSpaceQuery(runId: string, consent: RunConsent) {
   });
 }
 
-export function usePreviewItemsQuery(runId: string, protectedOnly: boolean, contentType: ContentType | null) {
+export function usePreviewItemsQuery(runId: string, group: ItemGroup, contentType: ContentType | null) {
   return useInfiniteQuery({
-    queryKey: ["preview", runId, "items", protectedOnly, contentType],
+    queryKey: ["preview", runId, "items", group, contentType],
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
-      api.previewItems({ runId, protectedOnly, contentType, offset: pageParam, limit: PREVIEW_PAGE_SIZE }),
+      api.previewItems({ runId, group, contentType, offset: pageParam, limit: PREVIEW_PAGE_SIZE }),
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === PREVIEW_PAGE_SIZE ? pages.length * PREVIEW_PAGE_SIZE : undefined,
   });
