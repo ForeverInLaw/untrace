@@ -132,7 +132,7 @@ export interface BackupRequest {
 export interface RunConsent {
   /// The person agreed to delete items the backup cannot hold in full.
   allowIncompleteBackup: boolean;
-  /// The person agreed to delete items whose files the platform no longer hands over.
+  /// The person agreed to delete items whose files the platform refuses to hand over.
   allowLostFiles: boolean;
 }
 

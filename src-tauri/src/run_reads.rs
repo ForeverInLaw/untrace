@@ -197,7 +197,7 @@ pub struct UnsavedItem {
     platform_id: String,
     created_at_secs: Option<i64>,
     text: Option<String>,
-    /// `unavailable`: the platform refused the file. `unreachable`: it may yet come.
+    /// `unavailable`: the platform refused the file. `unreachable`: anything else.
     failure: &'static str,
 }
 

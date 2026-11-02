@@ -26,9 +26,13 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
   const running = useRunStore((s) => s.status === "deleting");
   const { passphrase, setPassphrase, backupPassphrase } = useBackupPassphrase(flowPassphrase);
   const [allowLostFiles, setAllowLostFiles] = useState(false);
-  const unsaved = useUnsavedFilesQuery(runId).data;
+  const unsavedQuery = useUnsavedFilesQuery(runId);
+  const unsaved = unsavedQuery.data;
   const retry = useRetryUnsavedFilesMutation(platformId, apply);
 
+  if (unsavedQuery.isError) {
+    return <Notice tone="fault">{errorMessage(unsavedQuery.error)}</Notice>;
+  }
   if (!unsaved || unsaved.total === 0) {
     return null;
   }
