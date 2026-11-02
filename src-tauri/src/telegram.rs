@@ -202,6 +202,7 @@ mod fallback {
         _state: State<'_, TelegramState>,
         run_id: String,
         _backup_passphrase: Option<String>,
+        _allow_incomplete_backup: bool,
         _on_event: tauri::ipc::Channel<lethe_core::ProgressEvent>,
     ) -> Result<(), CommandError> {
         let _ = run_id;

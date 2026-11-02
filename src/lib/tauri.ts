@@ -124,12 +124,15 @@ export interface BuildRunRequest {
   filter: FilterRequest;
 }
 
-export interface StartRunRequest {
+export interface VerifyBackupRequest {
   runId: string;
   backupPassphrase: string | null;
 }
 
-export interface VerifyBackupRequest extends StartRunRequest {}
+export interface StartRunRequest extends VerifyBackupRequest {
+  /// The person agreed to delete items the backup cannot hold in full.
+  allowIncompleteBackup: boolean;
+}
 
 export interface BackupVerification {
   ok: boolean;
@@ -141,6 +144,8 @@ export interface PreviewSummary extends PreviewCounts {
   types: { content_type: ContentType; count: number }[];
   /// Bytes: the media going into the backup, what that takes on disk, what is free.
   backup_space: { media: number; needed: number; available: number; fits: boolean };
+  /// Pending items the backup cannot hold in full; they go only with consent.
+  backup_gaps: number;
 }
 
 export interface PreviewItem {
@@ -202,6 +207,7 @@ export const api = {
     return invoke<void>("telegram_start_run", {
       runId: req.runId,
       backupPassphrase: req.backupPassphrase,
+      allowIncompleteBackup: req.allowIncompleteBackup,
       onEvent: channel,
     });
   },
@@ -222,6 +228,7 @@ export const api = {
     return invoke<void>("start_run", {
       runId: req.runId,
       backupPassphrase: req.backupPassphrase,
+      allowIncompleteBackup: req.allowIncompleteBackup,
       onEvent: channel,
     });
   },

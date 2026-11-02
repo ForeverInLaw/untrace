@@ -238,6 +238,7 @@ async fn dry_run(
         plan,
         filter: filter.clone(),
         backup: true,
+        allow_incomplete_backup: false,
     };
 
     let store = state.store.clone();
@@ -282,6 +283,7 @@ async fn start_run(
     state: State<'_, AppState>,
     run_id: String,
     backup_passphrase: Option<String>,
+    allow_incomplete_backup: bool,
     on_event: Channel<ProgressEvent>,
 ) -> Result<(), CommandError> {
     let pending = state
@@ -311,6 +313,7 @@ async fn start_run(
         run_id,
         pending,
         backup_passphrase,
+        allow_incomplete_backup,
         on_event,
     )
     .await
@@ -326,6 +329,7 @@ pub(crate) async fn execute_previewed_run(
     run_id: String,
     pending: PendingRun,
     backup_passphrase: Option<String>,
+    allow_incomplete_backup: bool,
     on_event: Channel<ProgressEvent>,
 ) -> Result<(), CommandError> {
     // Load keys/backup target up front: never start deleting what we cannot seal.
@@ -368,6 +372,7 @@ pub(crate) async fn execute_previewed_run(
         plan,
         filter: pending.filter,
         backup: true,
+        allow_incomplete_backup,
     };
 
     // Fire-and-forget on its own thread; the run outlives this command. The

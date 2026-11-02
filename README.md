@@ -7,8 +7,9 @@ receipt. The deletion engine lives in [Lethe](https://github.com/ForeverInLaw/le
 
 The project is in early alpha. The Bluesky path works end to end and has passed a live
 cleanup, with a post's text and files in the backup. Telegram works behind feature flags and has passed live runs on a test group, with
-media files in the backup; polls, locations and contacts back up without their
-content. The app lists only the services that work in the current build, in Russian
+media files in the backup. Each item also goes in whole, as the platform returned it, so
+polls, contacts, alt text and links are kept. An item the platform does not fully hand
+over is deleted only after a separate confirmation. The app lists only the services that work in the current build, in Russian
 or English.
 
 ## Building
