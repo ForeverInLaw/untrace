@@ -201,7 +201,7 @@ pub async fn list_accounts(
     telegram: State<'_, TelegramState>,
 ) -> Result<Vec<StoredSession>, CommandError> {
     let mut accounts = session::list(&state.session_dir)?;
-    if let Some(label) = telegram.signed_in_account().await {
+    if let Some(label) = telegram.signed_in_account().await? {
         accounts.push(StoredSession {
             platform: TELEGRAM.into(),
             label,

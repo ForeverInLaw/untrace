@@ -66,6 +66,9 @@ export const ru = {
   "account.telegram.connecting": "Подключение к Telegram…",
   "account.telegram.logOut": "Выйти",
   "account.telegram.confirmLogOut": "Выйти из Telegram?",
+  "account.telegram.signingOut": "Выход из Telegram…",
+  "account.telegram.changeKey": "Другой ключ API",
+  "account.telegram.confirmChangeKey": "Забыть этот ключ API?",
 
   "scope.heading": "Что удалить с {{account}}?",
   "scope.types": "Типы записей",

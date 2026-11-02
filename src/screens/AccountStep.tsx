@@ -190,8 +190,11 @@ function TelegramConnect() {
     : Boolean(phone.trim() && (keyTaken || (apiId.trim() && apiHash.trim())));
 
   const body = () => {
-    if (status.isPending || phase === "signing_out") {
+    if (status.isPending) {
       return <p className="help">{t("account.telegram.connecting")}</p>;
+    }
+    if (phase === "signing_out") {
+      return <p className="help">{t("account.telegram.signingOut")}</p>;
     }
     if (ready) {
       return <p className="help">{t("account.telegram.ready", { label })}</p>;
@@ -254,6 +257,16 @@ function TelegramConnect() {
           </>
         ) : (
           <>
+            {/* TDLib keeps the API pair for the whole client; only a reset swaps it. */}
+            {phase === "wait_phone_number" && (
+              <ConfirmButton
+                confirmLabel={t("account.telegram.confirmChangeKey")}
+                disabled={pending || logOut.isPending}
+                onConfirm={() => logOut.mutate({ platform: "telegram", label })}
+              >
+                {t("account.telegram.changeKey")}
+              </ConfirmButton>
+            )}
             {needsSecret && (
               <Button onClick={() => setChangingDetails(true)}>{t("account.telegram.changeDetails")}</Button>
             )}

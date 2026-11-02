@@ -18,8 +18,8 @@ export function useTelegramScopeStatusQuery(enabled: boolean) {
   });
 }
 
-/// Each sign-in step can finish the sign-in, which also adds the account to the list.
-function useSignInRefresh() {
+/// Signing in or out changes both the Telegram status and the list of accounts.
+export function useSessionRefresh() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all([
@@ -29,7 +29,7 @@ function useSignInRefresh() {
 }
 
 export function useTelegramAuthStartMutation() {
-  const onSuccess = useSignInRefresh();
+  const onSuccess = useSessionRefresh();
   return useMutation({
     mutationKey: ["telegram", "auth-start"],
     mutationFn: (req: TelegramAuthStartRequest) => api.telegramAuthStart(req),
@@ -38,7 +38,7 @@ export function useTelegramAuthStartMutation() {
 }
 
 export function useTelegramAuthCodeMutation() {
-  const onSuccess = useSignInRefresh();
+  const onSuccess = useSessionRefresh();
   return useMutation({
     mutationKey: ["telegram", "auth-code"],
     mutationFn: (req: TelegramAuthCodeRequest) => api.telegramAuthCode(req),
@@ -47,7 +47,7 @@ export function useTelegramAuthCodeMutation() {
 }
 
 export function useTelegramAuthPasswordMutation() {
-  const onSuccess = useSignInRefresh();
+  const onSuccess = useSessionRefresh();
   return useMutation({
     mutationKey: ["telegram", "auth-password"],
     mutationFn: (req: TelegramAuthPasswordRequest) => api.telegramAuthPassword(req),

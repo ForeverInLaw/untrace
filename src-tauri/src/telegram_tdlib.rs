@@ -46,6 +46,8 @@ pub struct TelegramState {
     resumed: OnceCell<()>,
     /// Why the saved session did not reconnect; cleared by the next sign-in attempt.
     resume_failure: Mutex<Option<String>>,
+    /// Held for a whole sign-out, so two of them never race on one client.
+    signing_out: Mutex<()>,
 }
 
 #[derive(Default)]
@@ -66,6 +68,7 @@ impl TelegramState {
             api_key: ApiKeyKeeper::new(KeychainVault),
             resumed: OnceCell::new(),
             resume_failure: Mutex::new(None),
+            signing_out: Mutex::new(()),
         }
     }
 
@@ -88,8 +91,11 @@ impl TelegramState {
                         auth_states.lock().await.insert(client_id, status);
                     }
                     Ok(Some((enums::Update::ConnectionState(update), _))) => {
-                        let ready = matches!(update.state, enums::ConnectionState::Ready);
-                        online.store(ready, Ordering::Release);
+                        let reachable = matches!(
+                            update.state,
+                            enums::ConnectionState::Ready | enums::ConnectionState::Updating
+                        );
+                        online.store(reachable, Ordering::Release);
                     }
                     _ => tokio::time::sleep(Duration::from_millis(30)).await,
                 }
@@ -192,11 +198,28 @@ impl TelegramState {
         status
     }
 
+    /// Where the sign-in stands once the saved session has had its chance to
+    /// reconnect. A sign-in that reached Ready only after its wait timed out
+    /// learns here who is signed in.
+    async fn known_status(&self) -> Result<TelegramAuthStatus, CommandError> {
+        self.resumed().await;
+        let status = self.current_status().await;
+        let (client, identified) = {
+            let inner = self.inner.lock().await;
+            (inner.client, inner.current_user_id.is_some())
+        };
+        match client {
+            Some(client) if matches!(status.phase, TelegramAuthPhase::Ready) && !identified => {
+                self.settled_status(client).await
+            }
+            _ => Ok(status),
+        }
+    }
+
     pub(super) async fn ready_context(
         &self,
     ) -> Result<(TelegramAuthStatus, TdlibClientId, i64), CommandError> {
-        self.resumed().await;
-        let auth = self.current_status().await;
+        let auth = self.known_status().await?;
         if !matches!(auth.phase, TelegramAuthPhase::Ready) {
             return Err(CommandError::msg("Telegram is not authenticated"));
         }
@@ -212,32 +235,36 @@ impl TelegramState {
     }
 
     /// The signed-in account, once the saved session has had its chance to reconnect.
-    pub async fn signed_in_account(&self) -> Option<String> {
-        self.resumed().await;
-        let status = self.current_status().await;
-        if matches!(status.phase, TelegramAuthPhase::Ready) {
-            status.account_label
-        } else {
-            None
-        }
+    pub async fn signed_in_account(&self) -> Result<Option<String>, CommandError> {
+        let status = self.known_status().await?;
+        Ok(match status.phase {
+            TelegramAuthPhase::Ready => status.account_label,
+            _ => None,
+        })
     }
 
     /// Ends the session on Telegram's side, then removes what it left on this
     /// device. Without a connection nothing changes, so the session never lingers
     /// half-closed.
     pub async fn log_out(&self) -> Result<(), CommandError> {
+        let _one_at_a_time = self.signing_out.lock().await;
         self.resumed().await;
         let client = self.inner.lock().await.client;
-        if let Some(client) = client {
-            self.close_client(client).await?;
-        }
+        let Some(client) = client else {
+            // No session opened in this launch, so none can be ended. TDLib's folder
+            // stays: it may hold a session that only signing in again can close.
+            *self.resume_failure.lock().await = None;
+            return self.api_key.signed_out();
+        };
+        self.close_client(client).await?;
         *self.inner.lock().await = TelegramInner::default();
         *self.resume_failure.lock().await = None;
-        self.api_key.signed_out()?;
-        match std::fs::remove_dir_all(&self.root_dir) {
+        let removed = match std::fs::remove_dir_all(&self.root_dir) {
             Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
             _ => Ok(()),
-        }
+        };
+        self.api_key.signed_out()?;
+        removed
     }
 
     async fn close_client(&self, client: TdlibClientId) -> Result<(), CommandError> {
@@ -360,8 +387,7 @@ impl TelegramState {
 pub async fn telegram_scope_status(
     state: State<'_, TelegramState>,
 ) -> Result<TelegramScopeStatus, CommandError> {
-    state.resumed().await;
-    let auth = state.current_status().await;
+    let auth = state.known_status().await?;
     let client = state.inner.lock().await.client;
 
     if !matches!(auth.phase, TelegramAuthPhase::Ready) {

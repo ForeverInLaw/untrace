@@ -62,6 +62,9 @@ export const en = {
   "account.telegram.connecting": "Connecting to Telegram…",
   "account.telegram.logOut": "Log out",
   "account.telegram.confirmLogOut": "Log out of Telegram?",
+  "account.telegram.signingOut": "Signing out of Telegram…",
+  "account.telegram.changeKey": "Use another API key",
+  "account.telegram.confirmChangeKey": "Forget this API key?",
 
   "scope.heading": "What should go from {{account}}?",
   "scope.types": "Content types",
@@ -232,6 +235,6 @@ export const en = {
   "accounts.lead": "Sign-in details are stored only on this device.",
   "accounts.empty": "No accounts connected.",
   "accounts.disconnect": "Disconnect",
-  "accounts.confirmDisconnect": "Disconnect for sure?",
+  "accounts.confirmDisconnect": "Really disconnect?",
   "accounts.add": "Connect an account",
 } as const;

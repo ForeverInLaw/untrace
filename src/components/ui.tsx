@@ -8,7 +8,7 @@ export function Button({ kind = "secondary", className = "", type = "button", ..
   return <button className={`button button--${kind} ${className}`} type={type} {...props} />;
 }
 
-interface ConfirmButtonProps extends Omit<ButtonProps, "onClick"> {
+interface ConfirmButtonProps extends Omit<ButtonProps, "onClick" | "onBlur" | "onKeyDown"> {
   confirmLabel: string;
   onConfirm: () => void;
 }
@@ -32,7 +32,7 @@ export function ConfirmButton({ confirmLabel, onConfirm, children, ...props }: C
   );
 }
 
-type BoxProps =Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
+type BoxProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
 
 export function Checkbox({ className = "", ...props }: BoxProps) {
   return <input className={`checkbox ${className}`} type="checkbox" {...props} />;

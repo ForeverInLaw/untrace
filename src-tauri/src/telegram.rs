@@ -137,8 +137,8 @@ mod fallback {
             Self
         }
 
-        pub async fn signed_in_account(&self) -> Option<String> {
-            None
+        pub async fn signed_in_account(&self) -> Result<Option<String>, CommandError> {
+            Ok(None)
         }
 
         pub async fn log_out(&self) -> Result<(), CommandError> {
