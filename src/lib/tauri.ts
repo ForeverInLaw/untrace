@@ -212,13 +212,16 @@ export interface PreviewItem {
   content_type: ContentType;
   created_at_secs: number | null;
   text: string | null;
-  protected: boolean;
+  state: "pending" | "protected" | "undeletable";
   only_for_self: boolean;
 }
 
+/// Which preview rows a list shows. `all` leaves out what cannot be deleted.
+export type ItemGroup = "all" | "protected" | "only_for_self" | "undeletable";
+
 export interface PreviewItemsRequest {
   runId: string;
-  protectedOnly: boolean;
+  group: ItemGroup;
   contentType: ContentType | null;
   offset: number;
   limit: number;

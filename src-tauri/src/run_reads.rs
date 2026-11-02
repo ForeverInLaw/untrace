@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use lethe_adapter::ContentType;
 use lethe_crypto::receipt::RunSummary;
-use lethe_store::{ItemQuery, StoredReceipt};
+use lethe_store::{ItemGroup, ItemQuery, StoredReceipt};
 use serde::Serialize;
 use tauri::State;
 
@@ -43,7 +43,8 @@ pub struct PreviewItem {
     content_type: ContentType,
     created_at_secs: Option<i64>,
     text: Option<String>,
-    protected: bool,
+    /// `pending`, `protected` or `undeletable`.
+    state: &'static str,
     only_for_self: bool,
 }
 
@@ -118,7 +119,7 @@ pub(crate) async fn backup_space_for(
 pub async fn preview_items(
     state: State<'_, AppState>,
     run_id: String,
-    protected_only: bool,
+    group: ItemGroup,
     content_type: Option<ContentType>,
     offset: u32,
     limit: u32,
@@ -127,7 +128,7 @@ pub async fn preview_items(
     let rows = store.preview_items(
         &run_id,
         &ItemQuery {
-            protected_only,
+            group,
             content_type,
             offset,
             limit,
@@ -140,7 +141,7 @@ pub async fn preview_items(
             content_type: row.content_type,
             created_at_secs: row.created_at_secs,
             text: row.text,
-            protected: row.protected,
+            state: row.state.as_str(),
             only_for_self: row.only_for_self,
         })
         .collect())

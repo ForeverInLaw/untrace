@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { Button, Checkbox, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
-import type { ContentType, PreviewItem, PreviewSummary } from "../lib/tauri";
+import type { ContentType, ItemGroup, PreviewItem, PreviewSummary } from "../lib/tauri";
 import {
   useIsSavingProtection,
   usePreviewItemsQuery,
@@ -18,52 +18,76 @@ function useCount() {
   return (value: number) => t("cleanup.plainNumber", { value });
 }
 
-type Filter = { kind: "all" } | { kind: "type"; type: ContentType } | { kind: "protected" };
+type Filter = { group: ItemGroup; type: ContentType | null };
+
+const ALL: Filter = { group: "all", type: null };
+
+/// Text, type and date of a row, with an optional hint laid over the text's end.
+function ItemCells({ item, hint }: { item: PreviewItem; hint?: ReactNode }) {
+  const { t } = useTranslation();
+  const format = useDateFormat();
+  return (
+    <>
+      <td title={item.text ?? undefined}>
+        <div className="cell-line">
+          <span className="cell-line__text">{item.text ?? t("preview.noText")}</span>
+          {hint}
+        </div>
+      </td>
+      <td className="cell-meta">{t(`contentTypeOne.${item.content_type}`)}</td>
+      <td className="cell-date">{item.created_at_secs === null ? "—" : format.day(item.created_at_secs)}</td>
+    </>
+  );
+}
 
 function ItemRow({ item, runId }: { item: PreviewItem; runId: string }) {
   const { t } = useTranslation();
-  const format = useDateFormat();
   const protect = useSetItemProtectedMutation(runId);
-  const toggle = () => protect.mutate({ platformId: item.platform_id, isProtected: !item.protected });
+  const isProtected = item.state === "protected";
+  const toggle = () => protect.mutate({ platformId: item.platform_id, isProtected: !isProtected });
 
   return (
-    <tr className={item.protected ? "row row--stays" : "row"} onClick={toggle}>
+    <tr className={isProtected ? "row row--stays" : "row"} onClick={toggle}>
       <td className="cell-check">
         <Checkbox
           aria-label={t("preview.toggleRow")}
-          checked={!item.protected}
+          checked={!isProtected}
           onChange={toggle}
           onClick={(event) => event.stopPropagation()}
         />
       </td>
-      <td title={item.text ?? undefined}>
-        <div className="cell-line">
-          <span className="cell-line__text">{item.text ?? t("preview.noText")}</span>
-          {protect.isError ? (
+      <ItemCells
+        hint={
+          protect.isError ? (
             <span className="hint hint--fault" role="alert">{t("preview.protectFailed")}</span>
-          ) : item.protected ? (
+          ) : isProtected ? (
             <span className="hint hint--stays">{t("preview.stay")}</span>
           ) : (
             <>
               {item.only_for_self && <span className="hint hint--reach">{t("preview.onlyForSelf")}</span>}
               <span className="hint hint--protect">{t("preview.protect")}</span>
             </>
-          )}
-        </div>
-      </td>
-      <td className="cell-meta">{t(`contentTypeOne.${item.content_type}`)}</td>
-      <td className="cell-date">{item.created_at_secs === null ? "—" : format.day(item.created_at_secs)}</td>
+          )
+        }
+        item={item}
+      />
+    </tr>
+  );
+}
+
+/// A row the platform does not let this account delete: listed, never selectable.
+function OutOfReachRow({ item }: { item: PreviewItem }) {
+  return (
+    <tr className="row row--disabled">
+      <td className="cell-check" />
+      <ItemCells item={item} />
     </tr>
   );
 }
 
 function ItemsTable({ runId, filter, undeletable }: { runId: string; filter: Filter; undeletable: number }) {
   const { t } = useTranslation();
-  const items = usePreviewItemsQuery(
-    runId,
-    filter.kind === "protected",
-    filter.kind === "type" ? filter.type : null,
-  );
+  const items = usePreviewItemsQuery(runId, filter.group, filter.type);
   const rows = items.data?.pages.flat() ?? [];
 
   return (
@@ -78,14 +102,18 @@ function ItemsTable({ runId, filter, undeletable }: { runId: string; filter: Fil
           </tr>
         </thead>
         <tbody>
-          {rows.map((item) => (
-            <ItemRow item={item} key={item.platform_id} runId={runId} />
-          ))}
+          {rows.map((item) =>
+            item.state === "undeletable" ? (
+              <OutOfReachRow item={item} key={item.platform_id} />
+            ) : (
+              <ItemRow item={item} key={item.platform_id} runId={runId} />
+            ),
+          )}
         </tbody>
       </table>
       {items.isSuccess && rows.length === 0 && (
         <p className="empty">
-          {t(filter.kind === "protected" ? "preview.emptyProtected" : undeletable > 0 ? "preview.emptyUndeletable" : "preview.empty")}
+          {t(filter.group === "protected" ? "preview.emptyProtected" : undeletable > 0 ? "preview.emptyUndeletable" : "preview.empty")}
         </p>
       )}
       {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
@@ -120,16 +148,43 @@ function DeleteReachFacts({ summary }: { summary: PreviewSummary }) {
   );
 }
 
+function Chip({
+  filter,
+  selected,
+  onSelect,
+  className = "chip",
+  children,
+}: {
+  filter: Filter;
+  selected: Filter;
+  onSelect: (filter: Filter) => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      aria-pressed={filter.group === selected.group && filter.type === selected.type}
+      className={className}
+      onClick={() => onSelect(filter)}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
 export function PreviewStep() {
   const { t } = useTranslation();
   const runId = useFlowStore((s) => s.runId) ?? "";
   const goTo = useFlowStore((s) => s.goTo);
-  const [filter, setFilter] = useState<Filter>({ kind: "all" });
+  const [filter, setFilter] = useState<Filter>(ALL);
   const summaryQuery = usePreviewSummaryQuery(runId);
   const summary = summaryQuery.data;
   const saving = useIsSavingProtection(runId);
   const pending = summary?.pending ?? 0;
   const protectedCount = summary?.protected ?? 0;
+  const onlyForSelf = summary?.only_for_self ?? 0;
+  const undeletable = summary?.undeletable ?? 0;
   const count = useCount();
 
   return (
@@ -150,31 +205,35 @@ export function PreviewStep() {
       {summaryQuery.isError && <Notice tone="fault">{errorMessage(summaryQuery.error)}</Notice>}
       {summary && <DeleteReachFacts summary={summary} />}
       <fieldset aria-label={t("preview.filterLabel")} className="chips">
-        <button aria-pressed={filter.kind === "all"} className="chip" onClick={() => setFilter({ kind: "all" })} type="button">
+        <Chip filter={ALL} onSelect={setFilter} selected={filter}>
           {t("preview.all")} <span>{count(pending)}</span>
-        </button>
+        </Chip>
         {summary?.types.map(({ content_type: type, count: value }) => (
-          <button
-            aria-pressed={filter.kind === "type" && filter.type === type}
-            className="chip"
-            key={type}
-            onClick={() => setFilter({ kind: "type", type })}
-            type="button"
-          >
+          <Chip filter={{ group: "all", type }} key={type} onSelect={setFilter} selected={filter}>
             {t(`contentType.${type}`)} <span>{count(value)}</span>
-          </button>
+          </Chip>
         ))}
-        <button
-          aria-pressed={filter.kind === "protected"}
+        {onlyForSelf > 0 && (
+          <Chip filter={{ group: "only_for_self", type: null }} onSelect={setFilter} selected={filter}>
+            {t("preview.onlyForSelf")} <span>{count(onlyForSelf)}</span>
+          </Chip>
+        )}
+        <Chip
           className="chip chip--protected"
-          onClick={() => setFilter({ kind: "protected" })}
-          type="button"
+          filter={{ group: "protected", type: null }}
+          onSelect={setFilter}
+          selected={filter}
         >
           <ShieldCheck aria-hidden="true" size={15} />
           {t("preview.protected")} <span>{count(protectedCount)}</span>
-        </button>
+        </Chip>
+        {undeletable > 0 && (
+          <Chip filter={{ group: "undeletable", type: null }} onSelect={setFilter} selected={filter}>
+            {t("preview.reachNowhere")} <span>{count(undeletable)}</span>
+          </Chip>
+        )}
       </fieldset>
-      <ItemsTable filter={filter} runId={runId} undeletable={summary?.undeletable ?? 0} />
+      <ItemsTable filter={filter} runId={runId} undeletable={undeletable} />
     </Screen>
   );
 }
