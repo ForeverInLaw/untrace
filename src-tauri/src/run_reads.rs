@@ -12,7 +12,7 @@ use tauri::State;
 use crate::backup::{self, BackupSpace};
 use crate::session::{self, StoredSession};
 use crate::telegram::TelegramState;
-use crate::{AppState, CommandError};
+use crate::{AppState, CommandError, RunConsent};
 
 const TELEGRAM: &str = "telegram";
 
@@ -27,7 +27,6 @@ pub struct PreviewSummary {
     pending: u64,
     protected: u64,
     types: Vec<TypeCount>,
-    backup_space: BackupSpace,
     /// Pending items the backup cannot hold in full; they go only with consent.
     backup_gaps: u64,
     /// Pending items other people keep seeing; they go only with consent.
@@ -82,18 +81,37 @@ pub async fn preview_summary(
             count,
         })
         .collect();
-    let backup_space = backup::backup_space(&state.backup_dir, &store.pending_media(&run_id)?)?;
     let consents = store.pending_consents(&run_id)?;
     Ok(PreviewSummary {
         pending: counts.pending,
         protected: counts.protected,
         types,
-        backup_space,
         backup_gaps: consents.backup_gaps,
         only_for_self: consents.only_for_self,
         consents_overlap: consents.both,
         undeletable: counts.undeletable,
     })
+}
+
+/// Whether the disk holds the backup of what goes with these agreements.
+#[tauri::command]
+pub async fn preview_backup_space(
+    state: State<'_, AppState>,
+    run_id: String,
+    consent: RunConsent,
+) -> Result<BackupSpace, CommandError> {
+    backup_space_for(&state, &run_id, consent).await
+}
+
+/// Space for the backup of a previewed run, given what the person agreed to delete.
+/// The start of a run checks the same, so the screen and the start never disagree.
+pub(crate) async fn backup_space_for(
+    state: &AppState,
+    run_id: &str,
+    consent: RunConsent,
+) -> Result<BackupSpace, CommandError> {
+    let media = state.reader.lock().await.pending_media(run_id, consent.into())?;
+    backup::backup_space(&state.backup_dir, &media)
 }
 
 #[tauri::command]

@@ -4,7 +4,8 @@ import { Button, CheckboxLabel, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useByteFormat, useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
-import { usePreviewSummaryQuery, useStartRunMutation } from "../queries/runs";
+import type { RunConsent } from "../lib/tauri";
+import { useBackupSpaceQuery, usePreviewSummaryQuery, useStartRunMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { useRunStore } from "../stores/runStore";
 import { NewBackupPassphraseField } from "./BackupExport";
@@ -49,8 +50,15 @@ export function BackupStep() {
   const [confirmed, setConfirmed] = useState(false);
   const [deleteIncomplete, setDeleteIncomplete] = useState(false);
   const [deleteForSelf, setDeleteForSelf] = useState(false);
+  const consent: RunConsent = {
+    allowIncompleteBackup: deleteIncomplete,
+    allowLostFiles: false,
+    allowOnlyForSelf: deleteForSelf,
+  };
   const summaryQuery = usePreviewSummaryQuery(runId);
   const summary = summaryQuery.data;
+  const spaceQuery = useBackupSpaceQuery(runId, consent);
+  const space = spaceQuery.data;
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId)?.display_name ?? platformId;
   const start = useStartRunMutation(platformId, apply);
   const period = usePeriodLabel();
@@ -64,9 +72,8 @@ export function BackupStep() {
     (deleteIncomplete || deleteForSelf ? 0 : summary?.consents_overlap ?? 0);
   const deleting = (summary?.pending ?? 0) - kept;
   const types = summary?.types.map(({ content_type: type }) => t(`contentType.${type}`).toLowerCase()).join(", ");
-  const error = errorMessage(start.error ?? summaryQuery.error);
+  const error = errorMessage(start.error ?? summaryQuery.error ?? spaceQuery.error);
   const formatBytes = useByteFormat();
-  const space = summary?.backup_space;
 
   // Changing what goes also changes the count that was confirmed.
   const consentTo = (set: (allowed: boolean) => void) => (allowed: boolean) => {
@@ -78,7 +85,7 @@ export function BackupStep() {
     await start.mutateAsync({
       runId,
       backupPassphrase: passphrase.length > 0 ? passphrase : null,
-      consent: { allowIncompleteBackup: deleteIncomplete, allowLostFiles: false, allowOnlyForSelf: deleteForSelf },
+      consent,
     });
     goTo("run");
   };
@@ -88,7 +95,7 @@ export function BackupStep() {
       actions={
         <>
           <Button onClick={() => goTo("preview")}>{t("backup.back")}</Button>
-          <Button disabled={!confirmed || start.isPending || deleting === 0 || space?.fits === false} kind="primary" onClick={onStart}>
+          <Button disabled={!confirmed || start.isPending || deleting === 0 || spaceQuery.isPlaceholderData || space?.fits === false} kind="primary" onClick={onStart}>
             {t("backup.start", { count: deleting })}
           </Button>
         </>
