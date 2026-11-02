@@ -347,6 +347,13 @@ pub(crate) async fn execute_previewed_run(
         return Err(CommandError::msg("not enough free disk space for the backup"));
     }
 
+    let started = now_secs();
+    state
+        .reader
+        .lock()
+        .await
+        .set_run_started(&run_id, started as i64)?;
+
     let control = RunControl::new();
     state
         .controls
@@ -380,10 +387,9 @@ pub(crate) async fn execute_previewed_run(
     // result receiver is dropped — the run reports via the progress channel.
     let _run_rx = run_offthread(move || async move {
         let mut scheduler = Scheduler::new();
-        let started = now_secs();
         let mut guard = store.lock().await;
 
-        match pipeline::execute(
+        let failure = match pipeline::execute(
             adapter,
             &mut guard,
             &mut scheduler,
@@ -405,21 +411,19 @@ pub(crate) async fn execute_previewed_run(
                     skipped: outcome.skipped,
                     failed: outcome.failed,
                 };
-                if let Err(e) = pipeline::store_receipt(&guard, &signer, &summary) {
-                    let _ = tx.send(ProgressEvent::Error {
-                        message: e.to_string(),
-                    });
-                }
+                pipeline::store_receipt(&guard, &signer, &summary)
+                    .err()
+                    .map(|e| e.to_string())
             }
-            Err(e) => {
-                let _ = tx.send(ProgressEvent::Error {
-                    message: e.to_string(),
-                });
-            }
-        }
+            Err(e) => Some(e.to_string()),
+        };
 
         drop(guard);
         controls.lock().await.remove(&run_req.run_id);
+        // After the removal, so whoever hears this can already see the run as interrupted.
+        if let Some(message) = failure {
+            let _ = tx.send(ProgressEvent::Error { message });
+        }
     });
 
     Ok(())

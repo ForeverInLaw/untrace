@@ -99,10 +99,17 @@ export function useDryRunMutation() {
 
 /// Starts the previewed run on whichever engine the platform uses.
 export function useStartRunMutation(platformId: string, onEvent: (event: ProgressEvent) => void) {
+  const queryClient = useQueryClient();
+  const handleEvent = (event: ProgressEvent) => {
+    onEvent(event);
+    if (event.event === "error") {
+      void queryClient.invalidateQueries({ queryKey: ["interrupted-runs"] });
+    }
+  };
   return useMutation({
     mutationKey: ["runs", "start"],
     mutationFn: (req: StartRunRequest) =>
-      platformId === "telegram" ? api.telegramStartRun(req, onEvent) : api.startRun(req, onEvent),
+      platformId === "telegram" ? api.telegramStartRun(req, handleEvent) : api.startRun(req, handleEvent),
   });
 }
 
