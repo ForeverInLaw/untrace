@@ -213,7 +213,8 @@ export function PreviewStep() {
             {t(`contentType.${type}`)} <span>{count(value)}</span>
           </Chip>
         ))}
-        {onlyForSelf > 0 && (
+        {/* Kept while selected: protecting the last of them would otherwise hide it. */}
+        {(onlyForSelf > 0 || filter.group === "only_for_self") && (
           <Chip filter={{ group: "only_for_self", type: null }} onSelect={setFilter} selected={filter}>
             {t("preview.onlyForSelf")} <span>{count(onlyForSelf)}</span>
           </Chip>
