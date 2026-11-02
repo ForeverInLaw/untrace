@@ -30,10 +30,15 @@ pub enum TelegramAuthPhase {
     Disabled,
     Idle,
     Starting,
+    /// TDLib needs the API pair before anything else.
+    WaitParameters,
+    /// TDLib holds the API pair and waits for a phone number.
+    WaitPhoneNumber,
     WaitCode,
     WaitPassword,
     WaitOtherDeviceConfirmation,
     Ready,
+    SigningOut,
     Closed,
     Error,
 }
@@ -130,6 +135,16 @@ mod fallback {
     impl TelegramState {
         pub fn new(_root_dir: PathBuf) -> Self {
             Self
+        }
+
+        pub async fn signed_in_account(&self) -> Option<String> {
+            None
+        }
+
+        pub async fn log_out(&self) -> Result<(), CommandError> {
+            Err(CommandError::msg(
+                "Telegram TDLib is not enabled in this build",
+            ))
         }
     }
 

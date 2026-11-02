@@ -23,8 +23,13 @@ pub fn receipt_signer() -> Result<ReceiptSigner, CommandError> {
     }
 }
 
+/// One of the app's entries in the OS keychain.
+pub fn keychain_entry(user: &str) -> Result<keyring::Entry, CommandError> {
+    Ok(keyring::Entry::new(KEYRING_SERVICE, user)?)
+}
+
 pub fn keychain_data_key(user: &str, label: &str) -> Result<DataKey, CommandError> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, user)?;
+    let entry = keychain_entry(user)?;
     match entry.get_secret() {
         Ok(bytes) if bytes.len() == 32 => {
             let mut key: DataKey = [0u8; 32];
