@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { hashKey, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   type TelegramAuthCodeRequest,
@@ -35,12 +35,16 @@ export function useTelegramScopeStatusQuery(enabled: boolean) {
 }
 
 /// Signing in or out changes the Telegram status, its chats and the list of accounts.
+/// The chat list is dropped, not kept while it reloads, so another account's chats
+/// never show under the new one.
 export function useSessionRefresh() {
   const queryClient = useQueryClient();
   return () =>
-    Promise.all(
-      [AUTH_KEY, SCOPE_STATUS_KEY, ["accounts"]].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
-    );
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: AUTH_KEY }),
+      queryClient.resetQueries({ queryKey: SCOPE_STATUS_KEY }),
+      queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+    ]);
 }
 
 export function useTelegramAuthStartMutation() {
@@ -102,8 +106,15 @@ export function useTelegramOwnMessageCounts(account: string, chats: TelegramChat
   return useQueries({
     queries: chats.map((chat) => ({
       queryKey: [...ownCountKey(account, chat.id), chat.last_message_id],
-      queryFn: ({ signal }) =>
-        oneAtATime(signal, () => api.telegramOwnMessageCount(chat.id)),
+      queryFn: async ({ signal, queryKey }) => {
+        const count = await oneAtATime(signal, () => api.telegramOwnMessageCount(chat.id));
+        // Counts of the chat's earlier versions are of no further use.
+        queryClient.removeQueries({
+          queryKey: ownCountKey(account, chat.id),
+          predicate: (query) => query.queryHash !== hashKey(queryKey),
+        });
+        return count;
+      },
       enabled: chat.kind !== "secret",
       placeholderData: () => latestCount(chat.id),
       // The backend already sits out FLOOD_WAIT; retrying here would only add searches.
