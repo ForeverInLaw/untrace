@@ -6,6 +6,7 @@ import { usePlatformsQuery } from "../queries/platforms";
 import { useExportBackupMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { BackupExportResult, BackupPassphraseField, ExportBackupButton, useBackupPassphrase } from "./BackupExport";
+import { UnsavedFilesSection } from "./UnsavedFilesSection";
 
 interface InterruptedRunDetailProps {
   run: InterruptedRun;
@@ -39,6 +40,7 @@ export function InterruptedRunDetail({ run, exit }: InterruptedRunDetailProps) {
       </dl>
       {exportBackup.isError && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
       <BackupExportResult mutation={exportBackup} />
+      <UnsavedFilesSection account={run.account_label} platformId={run.platform} runId={run.run_id} />
     </Screen>
   );
 }

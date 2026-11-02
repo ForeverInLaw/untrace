@@ -1317,3 +1317,24 @@ small {
     transition-duration: 1ms !important;
   }
 }
+
+.unsaved {
+  margin-top: 28px;
+}
+
+.unsaved__rows {
+  max-height: 320px;
+}
+
+.unsaved__why {
+  padding-left: 16px;
+  white-space: nowrap;
+}
+
+.unsaved .field {
+  margin-top: 18px;
+}
+
+.unsaved__retry {
+  margin-top: 18px;
+}

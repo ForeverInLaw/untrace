@@ -188,3 +188,50 @@ pub async fn disconnect_account(
 ) -> Result<(), CommandError> {
     session::remove(&state.session_dir, &platform, &label)
 }
+
+/// As many rows as a receipt shows; the total covers the rest.
+const UNSAVED_FILES_SHOWN: u32 = 50;
+
+#[derive(Serialize)]
+pub struct UnsavedItem {
+    platform_id: String,
+    created_at_secs: Option<i64>,
+    text: Option<String>,
+    /// `unavailable`: the platform refused the file. `unreachable`: it may yet come.
+    failure: &'static str,
+}
+
+#[derive(Serialize)]
+pub struct UnsavedFiles {
+    total: u64,
+    /// How many may go without their file, with the person's consent.
+    unavailable: u64,
+    items: Vec<UnsavedItem>,
+}
+
+/// What stayed in a run because its files could not be saved.
+#[tauri::command]
+pub async fn list_unsaved_files(
+    state: State<'_, AppState>,
+    run_id: String,
+) -> Result<UnsavedFiles, CommandError> {
+    let unsaved = state
+        .reader
+        .lock()
+        .await
+        .unsaved_files(&run_id, UNSAVED_FILES_SHOWN)?;
+    Ok(UnsavedFiles {
+        total: unsaved.total,
+        unavailable: unsaved.unavailable,
+        items: unsaved
+            .items
+            .into_iter()
+            .map(|item| UnsavedItem {
+                platform_id: item.platform_id,
+                created_at_secs: item.created_at_secs,
+                text: item.text,
+                failure: item.failure.as_str(),
+            })
+            .collect(),
+    })
+}

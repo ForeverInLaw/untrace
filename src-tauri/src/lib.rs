@@ -92,6 +92,14 @@ pub struct BuildRunRequest {
     pub filter: run_filters::FilterRequest,
 }
 
+/// What the person agreed to lose from the backup when starting a run.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunConsent {
+    allow_incomplete_backup: bool,
+    allow_lost_files: bool,
+}
+
 #[derive(Debug, Serialize)]
 pub struct DryRunResult {
     pub run_id: String,
@@ -240,6 +248,7 @@ async fn dry_run(
         filter: filter.clone(),
         backup: true,
         allow_incomplete_backup: false,
+        allow_lost_files: false,
     };
 
     let store = state.store.clone();
@@ -284,7 +293,7 @@ async fn start_run(
     state: State<'_, AppState>,
     run_id: String,
     backup_passphrase: Option<String>,
-    allow_incomplete_backup: bool,
+    consent: RunConsent,
     on_event: Channel<ProgressEvent>,
 ) -> Result<(), CommandError> {
     let pending = state
@@ -314,10 +323,47 @@ async fn start_run(
         run_id,
         pending,
         backup_passphrase,
-        allow_incomplete_backup,
+        consent,
         on_event,
     )
     .await
+}
+
+/// Opens a follow-up run for what stayed in `run_id` because its files could not be
+/// saved. It starts through the same command as any previewed run.
+#[tauri::command]
+async fn retry_unsaved_files(
+    state: State<'_, AppState>,
+    run_id: String,
+) -> Result<DryRunResult, CommandError> {
+    let retry_id = format!("retry-{}", now_secs());
+    let retry = state
+        .reader
+        .lock()
+        .await
+        .retry_unsaved_files(&run_id, &retry_id, now_secs() as i64)?;
+    state.pending.lock().await.insert(
+        retry_id.clone(),
+        PendingRun {
+            platform: retry.platform,
+            account_id: retry.account.clone(),
+            account_label: retry.account,
+            filter: run_filters::to_filter_spec(&Default::default())?,
+        },
+    );
+    Ok(DryRunResult {
+        run_id: retry_id,
+        pending: retry.items,
+        protected: 0,
+    })
+}
+
+/// Drops a follow-up run that could not start.
+#[tauri::command]
+async fn discard_retry(state: State<'_, AppState>, run_id: String) -> Result<(), CommandError> {
+    state.pending.lock().await.remove(&run_id);
+    state.reader.lock().await.discard_retry(&run_id)?;
+    Ok(())
 }
 
 /// Phase-2 machinery shared by every platform's start command: wire backup +
@@ -330,7 +376,7 @@ pub(crate) async fn execute_previewed_run(
     run_id: String,
     pending: PendingRun,
     backup_passphrase: Option<String>,
-    allow_incomplete_backup: bool,
+    consent: RunConsent,
     on_event: Channel<ProgressEvent>,
 ) -> Result<(), CommandError> {
     // Load keys/backup target up front: never start deleting what we cannot seal.
@@ -380,7 +426,8 @@ pub(crate) async fn execute_previewed_run(
         plan,
         filter: pending.filter,
         backup: true,
-        allow_incomplete_backup,
+        allow_incomplete_backup: consent.allow_incomplete_backup,
+        allow_lost_files: consent.allow_lost_files,
     };
 
     // Fire-and-forget on its own thread; the run outlives this command. The
@@ -553,6 +600,8 @@ pub fn run() {
             connect_account,
             dry_run,
             start_run,
+            retry_unsaved_files,
+            discard_retry,
             verify_backup,
             export_backup,
             pause_run,
@@ -564,6 +613,7 @@ pub fn run() {
             run_reads::list_receipts,
             run_reads::get_receipt,
             run_reads::list_interrupted_runs,
+            run_reads::list_unsaved_files,
             run_reads::list_accounts,
             run_reads::disconnect_account,
         ])

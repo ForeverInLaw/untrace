@@ -129,9 +129,15 @@ export interface BackupRequest {
   backupPassphrase: string | null;
 }
 
-export interface StartRunRequest extends BackupRequest {
+export interface RunConsent {
   /// The person agreed to delete items the backup cannot hold in full.
   allowIncompleteBackup: boolean;
+  /// The person agreed to delete items whose files the platform no longer hands over.
+  allowLostFiles: boolean;
+}
+
+export interface StartRunRequest extends BackupRequest {
+  consent: RunConsent;
 }
 
 export interface BackupVerification {
@@ -156,6 +162,21 @@ export interface InterruptedRun {
   account_label: string;
   started_epoch_secs: number;
   deleted: number;
+}
+
+export interface UnsavedItem {
+  platform_id: string;
+  created_at_secs: number | null;
+  text: string | null;
+  failure: "unavailable" | "unreachable";
+}
+
+/// What stayed in a run because its files could not be saved, with the first rows.
+export interface UnsavedFiles {
+  total: number;
+  /// How many may go without their file, with the person's consent.
+  unavailable: number;
+  items: UnsavedItem[];
 }
 
 export interface PreviewSummary extends PreviewCounts {
@@ -225,7 +246,7 @@ export const api = {
     return invoke<void>("telegram_start_run", {
       runId: req.runId,
       backupPassphrase: req.backupPassphrase,
-      allowIncompleteBackup: req.allowIncompleteBackup,
+      consent: req.consent,
       onEvent: channel,
     });
   },
@@ -246,10 +267,14 @@ export const api = {
     return invoke<void>("start_run", {
       runId: req.runId,
       backupPassphrase: req.backupPassphrase,
-      allowIncompleteBackup: req.allowIncompleteBackup,
+      consent: req.consent,
       onEvent: channel,
     });
   },
+
+  listUnsavedFiles: (runId: string) => invoke<UnsavedFiles>("list_unsaved_files", { runId }),
+  retryUnsavedFiles: (runId: string) => invoke<DryRunResult>("retry_unsaved_files", { runId }),
+  discardRetry: (runId: string) => invoke<void>("discard_retry", { runId }),
 
   verifyBackup: (req: BackupRequest) =>
     invoke<BackupVerification>("verify_backup", {
