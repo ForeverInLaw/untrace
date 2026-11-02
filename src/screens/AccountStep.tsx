@@ -187,7 +187,8 @@ function TelegramConnect() {
   // Loads the chat list in the background, so the next step opens with it.
   useTelegramScopeStatusQuery(ready);
   const secretLabel = phase === "wait_code" ? t("account.telegram.confirmCode") : t("account.telegram.confirmPassword");
-  const submitLabel = needsSecret ? secretLabel : t("account.connect");
+  const connectLabel = start.isPending ? t("account.telegram.connecting") : t("account.connect");
+  const submitLabel = needsSecret ? secretLabel : connectLabel;
   const canSubmit = needsSecret
     ? secret.length > 0
     : Boolean(phone.trim() && (keyTaken || (apiId.trim() && apiHash.trim())));

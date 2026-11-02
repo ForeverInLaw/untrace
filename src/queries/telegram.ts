@@ -10,7 +10,10 @@ import {
 
 const AUTH_KEY = ["telegram", "auth"] as const;
 const SCOPE_STATUS_KEY = ["telegram", "scope-status"] as const;
-const OWN_COUNT_KEY = ["telegram", "own-message-count"] as const;
+
+/// Counts of one account, or of one of its chats in every version seen so far.
+const ownCountKey = (account: string, chatId?: string) =>
+  ["telegram", "own-message-count", account, ...(chatId === undefined ? [] : [chatId])] as const;
 
 /// Sign-in state alone; it answers at once, without waiting for the chat list.
 export function useTelegramAuthStatusQuery() {
@@ -70,39 +73,48 @@ export type OwnMessageCounts = Record<string, number | null>;
 let countQueue: Promise<unknown> = Promise.resolve();
 
 /// Telegram answers a burst of searches with FLOOD_WAIT, so counts go one at a time.
-function oneAtATime<T>(task: () => Promise<T>): Promise<T> {
-  const run = countQueue.then(task);
+/// A count cancelled while it waits its turn is skipped.
+function oneAtATime<T>(signal: AbortSignal, task: () => Promise<T>): Promise<T> {
+  const run = countQueue.then(() => {
+    signal.throwIfAborted();
+    return task();
+  });
   countQueue = run.catch(() => undefined);
   return run;
 }
 
 /// Counts the account's own messages chat by chat, in list order, and keeps each
-/// count until that chat gets a new message. The scan goes on if the step is left,
-/// and a chat being recounted shows its last count meanwhile. TDLib can't search
-/// secret chats, so those stay unknown.
+/// count until that chat gets a new message. A chat being recounted shows its
+/// latest count meanwhile. Leaving the step stops the scan; a count that failed is
+/// tried again the next time the step opens. TDLib can't search secret chats, so
+/// those stay unknown.
 export function useTelegramOwnMessageCounts(account: string, chats: TelegramChatSummary[]) {
   const queryClient = useQueryClient();
-  const lastCount = (chatId: string) =>
+  const latestCount = (chatId: string) =>
     queryClient
-      .getQueriesData<number | null>({ queryKey: [...OWN_COUNT_KEY, account, chatId] })
+      .getQueriesData<number>({ queryKey: ownCountKey(account, chatId) })
+      .reverse()
       .find(([, count]) => count !== undefined)?.[1];
 
   return useQueries({
     queries: chats.map((chat) => ({
-      queryKey: [...OWN_COUNT_KEY, account, chat.id, chat.last_message_id],
-      queryFn: () => oneAtATime(() => api.telegramOwnMessageCount(chat.id).catch(() => null)),
+      queryKey: [...ownCountKey(account, chat.id), chat.last_message_id],
+      queryFn: ({ signal }) =>
+        oneAtATime(signal, () => api.telegramOwnMessageCount(chat.id)),
       enabled: chat.kind !== "secret",
-      placeholderData: () => lastCount(chat.id),
+      placeholderData: () => latestCount(chat.id),
+      // The backend already sits out FLOOD_WAIT; retrying here would only add searches.
+      retry: false,
       staleTime: Infinity,
       gcTime: Infinity,
     })),
     combine: (results) => {
       const counts: OwnMessageCounts = {};
-      chats.forEach((chat, index) => {
-        const count = chat.kind === "secret" ? null : results[index].data;
-        if (count !== undefined) counts[chat.id] = count;
+      results.forEach((result, index) => {
+        const count = result.isError || !result.isEnabled ? null : result.data;
+        if (count !== undefined) counts[chats[index].id] = count;
       });
-      return { counts, checking: results.filter((result) => result.isFetching).length };
+      return { counts, uncounted: results.filter((result) => result.isFetching).length };
     },
   });
 }
@@ -110,7 +122,7 @@ export function useTelegramOwnMessageCounts(account: string, chats: TelegramChat
 /// Recounts every chat of the account, changed or not.
 export function useRecountOwnMessages(account: string) {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: [...OWN_COUNT_KEY, account] });
+  return () => queryClient.invalidateQueries({ queryKey: ownCountKey(account) });
 }
 
 export function useTelegramDryRunChatsMutation() {

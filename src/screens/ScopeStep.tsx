@@ -188,7 +188,7 @@ function TelegramScope() {
   const available = useAvailableTypes();
   const status = useTelegramScopeStatusQuery(true);
   const chats = status.data?.chats ?? [];
-  const { counts, checking } = useTelegramOwnMessageCounts(account, chats);
+  const { counts, uncounted } = useTelegramOwnMessageCounts(account, chats);
   const recount = useRecountOwnMessages(account);
   const dryRun = useTelegramDryRunChatsMutation();
   const onReady = usePreviewReady();
@@ -224,14 +224,14 @@ function TelegramScope() {
         <p className="screen__lead">
           {!status.isError && (status.isPending
             ? t("chats.loading")
-            : checking > 0
-              ? t("chats.progress", { checked: chats.length - checking, total: chats.length })
+            : uncounted > 0
+              ? t("chats.progress", { checked: chats.length - uncounted, total: chats.length })
               : t("chats.done", { visible: visible.length, total: chats.length }))}
         </p>
         <button
           aria-label={t("chats.recheck")}
           className="icon-button"
-          disabled={status.isFetching || checking > 0}
+          disabled={status.isFetching || uncounted > 0}
           onClick={() => (status.isError ? status.refetch() : recount())}
           title={t("chats.recheck")}
           type="button"
@@ -263,7 +263,7 @@ function TelegramScope() {
             ))}
           </tbody>
         </table>
-        {checking === 0 && status.isSuccess && visible.length === 0 && (
+        {uncounted === 0 && status.isSuccess && visible.length === 0 && (
           <p className="empty">{t("chats.empty")}</p>
         )}
       </div>
