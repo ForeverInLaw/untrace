@@ -56,6 +56,7 @@ pub async fn telegram_dry_run_chats(
         filter: filter.clone(),
         backup: true,
         allow_incomplete_backup: false,
+        allow_lost_files: false,
     };
     let pending = PendingRun {
         platform: run_req.platform.clone(),

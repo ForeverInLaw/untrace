@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, CheckboxLabel, Notice, Screen, TextField } from "../components/ui";
+import { Button, CheckboxLabel, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useByteFormat, useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
 import { usePreviewSummaryQuery, useStartRunMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { useRunStore } from "../stores/runStore";
+import { NewBackupPassphraseField } from "./BackupExport";
 
 function usePeriodLabel() {
   const { t } = useTranslation();
@@ -49,7 +50,7 @@ export function BackupStep() {
     await start.mutateAsync({
       runId,
       backupPassphrase: passphrase.length > 0 ? passphrase : null,
-      allowIncompleteBackup: deleteIncomplete,
+      consent: { allowIncompleteBackup: deleteIncomplete, allowLostFiles: false },
     });
     goTo("run");
   };
@@ -68,15 +69,7 @@ export function BackupStep() {
       lead={t("backup.lead")}
       note={t("backup.note")}
     >
-      <TextField
-        autoComplete="new-password"
-        className="field--wide"
-        label={t("backup.passphrase")}
-        onChange={(event) => setPassphrase(event.target.value)}
-        placeholder={t("backup.passphrasePlaceholder")}
-        type="password"
-        value={passphrase}
-      />
+      <NewBackupPassphraseField onChange={setPassphrase} value={passphrase} />
       <section className="summary">
         <h2 className="section-heading">{t("backup.summary")}</h2>
         <dl className="facts">

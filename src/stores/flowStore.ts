@@ -58,6 +58,7 @@ interface FlowState {
   toggleChat: (chatId: string) => void;
   previewed: (runId: string) => void;
   setPassphrase: (passphrase: string) => void;
+  retryStarted: (retry: { runId: string; platformId: string; account: string; passphrase: string }) => void;
   startOver: () => void;
 }
 
@@ -88,6 +89,7 @@ export const useFlowStore = create<FlowState>((set) => ({
     })),
   previewed: (runId) => set({ runId, step: "preview" }),
   setPassphrase: (passphrase) => set({ passphrase }),
+  retryStarted: (retry) => set({ ...retry, step: "run", view: "cleanup", openReceiptId: null }),
   startOver: () => set({ ...initialCleanup, view: "cleanup", openReceiptId: null }),
 }));
 

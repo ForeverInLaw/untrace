@@ -113,6 +113,45 @@ export function useStartRunMutation(platformId: string, onEvent: (event: Progres
   });
 }
 
+export function useUnsavedFilesQuery(runId: string) {
+  return useQuery({ queryKey: ["unsaved-files", runId], queryFn: () => api.listUnsavedFiles(runId) });
+}
+
+interface RetryUnsavedFiles {
+  runId: string;
+  backupPassphrase: string | null;
+  allowLostFiles: boolean;
+}
+
+/// Starts a follow-up run for what stayed, and resolves to its id. Whatever is in it
+/// that the backup cannot hold in full, the person already agreed to in the first run.
+/// `onOpened` runs once the engine has accepted it, just before it starts.
+export function useRetryUnsavedFilesMutation(
+  platformId: string,
+  onEvent: (event: ProgressEvent) => void,
+  onOpened: () => void,
+) {
+  const start = useStartRunMutation(platformId, onEvent);
+  return useMutation({
+    mutationKey: ["runs", "retry-unsaved"],
+    mutationFn: async ({ runId, backupPassphrase, allowLostFiles }: RetryUnsavedFiles) => {
+      const { run_id: retryId } = await api.retryUnsavedFiles(runId);
+      onOpened();
+      try {
+        await start.mutateAsync({
+          runId: retryId,
+          backupPassphrase,
+          consent: { allowIncompleteBackup: true, allowLostFiles },
+        });
+      } catch (error) {
+        await api.discardRetry(retryId);
+        throw error;
+      }
+      return retryId;
+    },
+  });
+}
+
 export function usePauseRunMutation() {
   return useMutation({
     mutationKey: ["runs", "pause"],

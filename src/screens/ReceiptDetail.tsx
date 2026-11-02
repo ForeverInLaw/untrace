@@ -11,6 +11,7 @@ import { useExportBackupMutation, useReceiptQuery, useReceiptsQuery, useVerifyBa
 import { useFlowStore } from "../stores/flowStore";
 import { useRunStore } from "../stores/runStore";
 import { BackupExportResult, BackupPassphraseField, ExportBackupButton, useBackupPassphrase } from "./BackupExport";
+import { UnsavedFilesSection } from "./UnsavedFilesSection";
 
 const SEAL_SIZE = 280;
 
@@ -139,6 +140,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
           </figcaption>
         </figure>
       </div>
+      <UnsavedFilesSection account={summary.account_label} platformId={summary.platform} runId={runId} />
     </Screen>
   );
 }

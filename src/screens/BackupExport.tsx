@@ -29,6 +29,22 @@ export function BackupPassphraseField({ value, onChange }: BackupPassphraseField
   );
 }
 
+/// The password for a backup about to be written.
+export function NewBackupPassphraseField({ value, onChange }: BackupPassphraseFieldProps) {
+  const { t } = useTranslation();
+  return (
+    <TextField
+      autoComplete="new-password"
+      className="field--wide"
+      label={t("backup.passphrase")}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={t("backup.passphrasePlaceholder")}
+      type="password"
+      value={value}
+    />
+  );
+}
+
 type ExportMutation = ReturnType<typeof useExportBackupMutation>;
 
 interface ExportBackupButtonProps {

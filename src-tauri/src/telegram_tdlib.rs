@@ -394,7 +394,7 @@ pub async fn telegram_start_run(
     state: State<'_, TelegramState>,
     run_id: String,
     backup_passphrase: Option<String>,
-    allow_incomplete_backup: bool,
+    consent: crate::RunConsent,
     on_event: Channel<ProgressEvent>,
 ) -> Result<(), CommandError> {
     let pending = app
@@ -426,7 +426,7 @@ pub async fn telegram_start_run(
         run_id,
         pending,
         backup_passphrase,
-        allow_incomplete_backup,
+        consent,
         on_event,
     )
     .await
