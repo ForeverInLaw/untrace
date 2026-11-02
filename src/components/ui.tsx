@@ -59,7 +59,7 @@ export function TextAreaField({ label, ...props }: TextAreaFieldProps) {
 }
 
 interface NoticeProps {
-  tone: "caution" | "fault";
+  tone: "safe" | "caution" | "fault";
   icon?: ReactNode;
   children: ReactNode;
 }

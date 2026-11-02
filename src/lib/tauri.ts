@@ -124,12 +124,12 @@ export interface BuildRunRequest {
   filter: FilterRequest;
 }
 
-export interface VerifyBackupRequest {
+export interface BackupRequest {
   runId: string;
   backupPassphrase: string | null;
 }
 
-export interface StartRunRequest extends VerifyBackupRequest {
+export interface StartRunRequest extends BackupRequest {
   /// The person agreed to delete items the backup cannot hold in full.
   allowIncompleteBackup: boolean;
 }
@@ -138,6 +138,24 @@ export interface BackupVerification {
   ok: boolean;
   items: number;
   media_files: number;
+}
+
+export interface BackupExport {
+  folder: string;
+  items: number;
+  media_files: number;
+  /// False when the backup broke or ended before it was sealed, so it may have held more.
+  complete: boolean;
+  partial_file: string | null;
+}
+
+/// A run that ended without a receipt, reachable only through its backup.
+export interface InterruptedRun {
+  run_id: string;
+  platform: string;
+  account_label: string;
+  started_epoch_secs: number;
+  deleted: number;
 }
 
 export interface PreviewSummary extends PreviewCounts {
@@ -233,8 +251,15 @@ export const api = {
     });
   },
 
-  verifyBackup: (req: VerifyBackupRequest) =>
+  verifyBackup: (req: BackupRequest) =>
     invoke<BackupVerification>("verify_backup", {
+      runId: req.runId,
+      backupPassphrase: req.backupPassphrase,
+    }),
+
+  /// Null when the person cancelled the folder choice.
+  exportBackup: (req: BackupRequest) =>
+    invoke<BackupExport | null>("export_backup", {
       runId: req.runId,
       backupPassphrase: req.backupPassphrase,
     }),
@@ -245,6 +270,7 @@ export const api = {
     invoke<boolean>("set_item_protected", { runId, platformId, protected: isProtected }),
   listReceipts: () => invoke<Receipt[]>("list_receipts"),
   getReceipt: (runId: string) => invoke<Receipt | null>("get_receipt", { runId }),
+  listInterruptedRuns: () => invoke<InterruptedRun[]>("list_interrupted_runs"),
   listAccounts: () => invoke<StoredAccount[]>("list_accounts"),
   disconnectAccount: (account: StoredAccount) => invoke<void>("disconnect_account", { ...account }),
 

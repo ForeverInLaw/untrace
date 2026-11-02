@@ -6,7 +6,7 @@ import {
   type ContentType,
   type ProgressEvent,
   type StartRunRequest,
-  type VerifyBackupRequest,
+  type BackupRequest,
 } from "../lib/tauri";
 
 const PREVIEW_PAGE_SIZE = 100;
@@ -76,6 +76,10 @@ export function useReceiptsQuery() {
   return useQuery({ queryKey: ["receipts"], queryFn: api.listReceipts });
 }
 
+export function useInterruptedRunsQuery() {
+  return useQuery({ queryKey: ["interrupted-runs"], queryFn: api.listInterruptedRuns });
+}
+
 /// The engine reports `done` just before it stores the receipt, so keep asking
 /// until the receipt is there or reading it fails.
 export function useReceiptQuery(runId: string) {
@@ -95,10 +99,17 @@ export function useDryRunMutation() {
 
 /// Starts the previewed run on whichever engine the platform uses.
 export function useStartRunMutation(platformId: string, onEvent: (event: ProgressEvent) => void) {
+  const queryClient = useQueryClient();
+  const handleEvent = (event: ProgressEvent) => {
+    onEvent(event);
+    if (event.event === "error") {
+      void queryClient.invalidateQueries({ queryKey: ["interrupted-runs"] });
+    }
+  };
   return useMutation({
     mutationKey: ["runs", "start"],
     mutationFn: (req: StartRunRequest) =>
-      platformId === "telegram" ? api.telegramStartRun(req, onEvent) : api.startRun(req, onEvent),
+      platformId === "telegram" ? api.telegramStartRun(req, handleEvent) : api.startRun(req, handleEvent),
   });
 }
 
@@ -112,7 +123,14 @@ export function usePauseRunMutation() {
 export function useVerifyBackupMutation() {
   return useMutation({
     mutationKey: ["backups", "verify"],
-    mutationFn: (req: VerifyBackupRequest) => api.verifyBackup(req),
+    mutationFn: (req: BackupRequest) => api.verifyBackup(req),
+  });
+}
+
+export function useExportBackupMutation() {
+  return useMutation({
+    mutationKey: ["backups", "export"],
+    mutationFn: (req: BackupRequest) => api.exportBackup(req),
   });
 }
 

@@ -173,7 +173,14 @@ export const ru = {
   "run.resume": "Продолжить",
   "run.stop": "Остановить",
   "run.failedHeading": "Чистка прервалась",
+  "run.failedNote": "Если что-то уже удалено, копия этого есть в «Квитанциях».",
   "run.progressLabel": "Ход удаления",
+
+  "backup.export": "Выгрузить копию",
+  "backup.exporting": "Выгружаю…",
+  "backup.exported": "Сохранено в {{folder}}. Записей: {{items, number}}, файлов: {{files, number}}. Эта папка не зашифрована.",
+  "backup.exportCutOff": "Копия обрывается, поэтому здесь всё, что в ней было до этого места.",
+  "backup.exportPartialFile": "{{file}} оборван и сохранён как есть.",
 
   "receipt.heading_one": "Готово: удалена <n>{{count, number}}</n> запись",
   "receipt.heading_few": "Готово: удалено <n>{{count, number}}</n> записи",
@@ -203,6 +210,8 @@ export const ru = {
   "receipt.newCleanup": "Новая чистка",
 
   "receipts.heading": "Квитанции",
+  "receipts.interrupted": "Прервана",
+  "receipts.interruptedLead": "У этой чистки нет квитанции: она не дошла до конца. То, что она успела удалить, есть в копии.",
   "receipts.empty": "Квитанций пока нет. Она появится после первой чистки.",
   "receipts.back": "Все квитанции",
   "receipts.date": "Дата",

@@ -663,6 +663,7 @@ small {
   padding: 12px 14px;
   border-radius: var(--radius-control);
   background: var(--raise);
+  overflow-wrap: anywhere;
 }
 
 .notice--caution svg {
@@ -672,6 +673,10 @@ small {
 
 .notice--fault {
   color: var(--fault);
+}
+
+.notice--safe {
+  color: var(--safe);
 }
 
 /* Account step */
@@ -1019,6 +1024,12 @@ small {
   padding: 4px 0;
   border: 0;
   background: none;
+}
+
+.receipt-link__mark {
+  flex-shrink: 0;
+  width: 30px;
+  color: var(--caution);
 }
 
 /* Backup step */
