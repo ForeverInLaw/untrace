@@ -4,6 +4,8 @@ export const en = {
   "nav.accounts": "Accounts",
   "nav.recent": "Recent cleanups",
   "nav.noAccount": "No account connected",
+  "nav.accountsConnected_one": "{{count, number}} account connected",
+  "nav.accountsConnected_other": "{{count, number}} accounts connected",
   "nav.language": "Interface language",
 
   "cleanup.number": "Cleanup #{{number}}",
@@ -57,6 +59,9 @@ export const en = {
   "account.telegram.changeDetails": "Change details",
   "account.telegram.ready": "Connected as {{label}}",
   "account.telegram.continue": "Continue",
+  "account.telegram.connecting": "Connecting to Telegram…",
+  "account.telegram.logOut": "Log out",
+  "account.telegram.confirmLogOut": "Log out of Telegram?",
 
   "scope.heading": "What should go from {{account}}?",
   "scope.types": "Content types",
@@ -227,5 +232,6 @@ export const en = {
   "accounts.lead": "Sign-in details are stored only on this device.",
   "accounts.empty": "No accounts connected.",
   "accounts.disconnect": "Disconnect",
+  "accounts.confirmDisconnect": "Disconnect for sure?",
   "accounts.add": "Connect an account",
 } as const;

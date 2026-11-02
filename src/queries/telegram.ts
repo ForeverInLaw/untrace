@@ -18,30 +18,40 @@ export function useTelegramScopeStatusQuery(enabled: boolean) {
   });
 }
 
-export function useTelegramAuthStartMutation() {
+/// Each sign-in step can finish the sign-in, which also adds the account to the list.
+function useSignInRefresh() {
   const queryClient = useQueryClient();
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["telegram", "scope-status"] }),
+      queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+    ]);
+}
+
+export function useTelegramAuthStartMutation() {
+  const onSuccess = useSignInRefresh();
   return useMutation({
     mutationKey: ["telegram", "auth-start"],
     mutationFn: (req: TelegramAuthStartRequest) => api.telegramAuthStart(req),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["telegram", "scope-status"] }),
+    onSuccess,
   });
 }
 
 export function useTelegramAuthCodeMutation() {
-  const queryClient = useQueryClient();
+  const onSuccess = useSignInRefresh();
   return useMutation({
     mutationKey: ["telegram", "auth-code"],
     mutationFn: (req: TelegramAuthCodeRequest) => api.telegramAuthCode(req),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["telegram", "scope-status"] }),
+    onSuccess,
   });
 }
 
 export function useTelegramAuthPasswordMutation() {
-  const queryClient = useQueryClient();
+  const onSuccess = useSignInRefresh();
   return useMutation({
     mutationKey: ["telegram", "auth-password"],
     mutationFn: (req: TelegramAuthPasswordRequest) => api.telegramAuthPassword(req),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["telegram", "scope-status"] }),
+    onSuccess,
   });
 }
 

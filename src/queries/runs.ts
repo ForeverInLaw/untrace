@@ -25,12 +25,19 @@ export function useAccountsQuery() {
   return useQuery({ queryKey: ["accounts"], queryFn: api.listAccounts });
 }
 
-export function useDisconnectAccountMutation() {
+/// Signing out of Telegram also ends its live session, so its status refreshes too.
+export function useDisconnectAccountMutation(accountRemoved: (platform: string, label: string) => void) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ["accounts", "disconnect"],
     mutationFn: api.disconnectAccount,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+    onSuccess: (_, account) => {
+      accountRemoved(account.platform, account.label);
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["telegram", "scope-status"] }),
+      ]);
+    },
   });
 }
 

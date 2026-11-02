@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { Plus, Receipt, UserRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { languages, setLanguage } from "../i18n";
-import { useReceiptsQuery } from "../queries/runs";
+import { useAccountsQuery, useReceiptsQuery } from "../queries/runs";
 import { usePlatformsQuery } from "../queries/platforms";
 import { useFlowStore, type View } from "../stores/flowStore";
 import { Seal } from "./Seal";
@@ -53,6 +53,8 @@ function CurrentAccount() {
   const account = useFlowStore((s) => s.account);
   const platformId = useFlowStore((s) => s.platformId);
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId);
+  // Before an account is chosen, say what this device is signed in to, as Accounts does.
+  const connected = useAccountsQuery().data?.length ?? 0;
   return (
     <div className="sidebar__foot">
       <div className="sidebar__account">
@@ -62,7 +64,7 @@ function CurrentAccount() {
             <small>{platform?.display_name}</small>
           </>
         ) : (
-          <small>{t("nav.noAccount")}</small>
+          <small>{connected > 0 ? t("nav.accountsConnected", { count: connected }) : t("nav.noAccount")}</small>
         )}
       </div>
       <fieldset aria-label={t("nav.language")} className="language">

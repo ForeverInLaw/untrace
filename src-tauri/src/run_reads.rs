@@ -11,7 +11,10 @@ use tauri::State;
 
 use crate::backup::{self, BackupSpace};
 use crate::session::{self, StoredSession};
+use crate::telegram::TelegramState;
 use crate::{AppState, CommandError};
+
+const TELEGRAM: &str = "telegram";
 
 #[derive(Serialize)]
 pub struct TypeCount {
@@ -190,18 +193,41 @@ pub async fn list_interrupted_runs(
         .collect())
 }
 
+/// Every account signed in on this device. Telegram keeps its session in TDLib's
+/// own folder, so it is asked directly.
 #[tauri::command]
-pub async fn list_accounts(state: State<'_, AppState>) -> Result<Vec<StoredSession>, CommandError> {
-    session::list(&state.session_dir)
+pub async fn list_accounts(
+    state: State<'_, AppState>,
+    telegram: State<'_, TelegramState>,
+) -> Result<Vec<StoredSession>, CommandError> {
+    let mut accounts = session::list(&state.session_dir)?;
+    if let Some(label) = telegram.signed_in_account().await {
+        accounts.push(StoredSession {
+            platform: TELEGRAM.into(),
+            label,
+        });
+    }
+    Ok(accounts)
 }
 
+/// Forgets an account. For Telegram that ends the session itself, which a
+/// cleanup still deleting through it would lose.
 #[tauri::command]
 pub async fn disconnect_account(
     state: State<'_, AppState>,
+    telegram: State<'_, TelegramState>,
     platform: String,
     label: String,
 ) -> Result<(), CommandError> {
-    session::remove(&state.session_dir, &platform, &label)
+    if platform != TELEGRAM {
+        return session::remove(&state.session_dir, &platform, &label);
+    }
+    if !state.controls.lock().await.is_empty() {
+        return Err(CommandError::msg(
+            "Wait for the cleanup to finish before signing out of Telegram",
+        ));
+    }
+    telegram.log_out().await
 }
 
 /// As many rows as a receipt shows; the total covers the rest.

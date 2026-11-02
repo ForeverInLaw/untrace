@@ -60,6 +60,8 @@ interface FlowState {
   setPassphrase: (passphrase: string) => void;
   retryStarted: (retry: { runId: string; platformId: string; account: string; passphrase: string }) => void;
   startOver: () => void;
+  /// A disconnected account can no longer carry the cleanup it was chosen for.
+  accountRemoved: (platformId: string, account: string) => void;
 }
 
 /// Where the person is and what they chose. Server data stays in TanStack Query,
@@ -91,6 +93,10 @@ export const useFlowStore = create<FlowState>((set) => ({
   setPassphrase: (passphrase) => set({ passphrase }),
   retryStarted: (retry) => set({ ...retry, step: "run", view: "cleanup", openReceiptId: null }),
   startOver: () => set({ ...initialCleanup, view: "cleanup", openReceiptId: null }),
+  accountRemoved: (platformId, account) =>
+    set((state) =>
+      state.platformId === platformId && state.account === account ? { ...initialCleanup, platformId } : {},
+    ),
 }));
 
 /// The content types a run will cover, limited to what the platform has.
