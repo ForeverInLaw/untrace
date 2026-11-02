@@ -46,10 +46,13 @@ export type TelegramAuthPhase =
   | "disabled"
   | "idle"
   | "starting"
+  | "wait_parameters"
+  | "wait_phone_number"
   | "wait_code"
   | "wait_password"
   | "wait_other_device_confirmation"
   | "ready"
+  | "signing_out"
   | "closed"
   | "error";
 

@@ -13,7 +13,7 @@ use lethe_telegram::tdlib_bridge::{
 use tauri::ipc::Channel;
 use tauri::{async_runtime, State};
 use tdlib_rs::{enums, functions};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 
 use crate::secrets::{hex_encode, keychain_data_key, SESSION_KEY_USER};
 use crate::telegram::{
@@ -26,6 +26,11 @@ use crate::{AppState, CommandError, DryRunResult};
 #[path = "telegram_snapshot.rs"]
 mod snapshot;
 
+#[path = "telegram_api_key.rs"]
+mod api_key;
+
+use api_key::{ApiKey, ApiKeyKeeper, KeychainVault};
+
 const AUTH_WAIT: Duration = Duration::from_secs(20);
 const STARTING_MESSAGE: &str = "Starting Telegram TDLib client.";
 
@@ -33,7 +38,16 @@ pub struct TelegramState {
     root_dir: PathBuf,
     inner: Mutex<TelegramInner>,
     auth_states: Arc<Mutex<HashMap<i32, TelegramAuthStatus>>>,
+    /// Whether TDLib last reported a working connection to Telegram.
+    online: Arc<AtomicBool>,
     receiver_started: AtomicBool,
+    api_key: ApiKeyKeeper<KeychainVault>,
+    /// Set once the saved session has had its chance to reconnect.
+    resumed: OnceCell<()>,
+    /// Why the saved session did not reconnect; cleared by the next sign-in attempt.
+    resume_failure: Mutex<Option<String>>,
+    /// Held for a whole sign-out, so two of them never race on one client.
+    signing_out: Mutex<()>,
 }
 
 #[derive(Default)]
@@ -49,7 +63,12 @@ impl TelegramState {
             root_dir,
             inner: Mutex::new(TelegramInner::default()),
             auth_states: Arc::new(Mutex::new(HashMap::new())),
+            online: Arc::new(AtomicBool::new(false)),
             receiver_started: AtomicBool::new(false),
+            api_key: ApiKeyKeeper::new(KeychainVault),
+            resumed: OnceCell::new(),
+            resume_failure: Mutex::new(None),
+            signing_out: Mutex::new(()),
         }
     }
 
@@ -63,36 +82,91 @@ impl TelegramState {
         }
 
         let auth_states = self.auth_states.clone();
+        let online = self.online.clone();
         async_runtime::spawn(async move {
             loop {
-                let update = tokio::task::spawn_blocking(tdlib_rs::receive).await;
-                let Ok(Some((enums::Update::AuthorizationState(update), client_id))) = update
-                else {
-                    tokio::time::sleep(Duration::from_millis(30)).await;
-                    continue;
-                };
-
-                let status = status_from_authorization(update.authorization_state);
-                auth_states.lock().await.insert(client_id, status);
+                match tokio::task::spawn_blocking(tdlib_rs::receive).await {
+                    Ok(Some((enums::Update::AuthorizationState(update), client_id))) => {
+                        let status = status_from_authorization(update.authorization_state);
+                        auth_states.lock().await.insert(client_id, status);
+                    }
+                    Ok(Some((enums::Update::ConnectionState(update), _))) => {
+                        let reachable = matches!(
+                            update.state,
+                            enums::ConnectionState::Ready | enums::ConnectionState::Updating
+                        );
+                        online.store(reachable, Ordering::Release);
+                    }
+                    _ => tokio::time::sleep(Duration::from_millis(30)).await,
+                }
             }
         });
     }
 
-    async fn ensure_client(&self) -> Result<TdlibClientId, CommandError> {
+    /// The live client, replacing one that has closed after a sign-out.
+    async fn ensure_client(&self) -> TdlibClientId {
         self.ensure_receiver();
 
         let mut inner = self.inner.lock().await;
+        let mut auth_states = self.auth_states.lock().await;
         if let Some(client) = inner.client {
-            return Ok(client);
+            let closed = auth_states
+                .get(&client.raw())
+                .is_some_and(|status| matches!(status.phase, TelegramAuthPhase::Closed));
+            if !closed {
+                return client;
+            }
         }
 
         let client = TdlibClientId::new(tdlib_rs::create_client());
-        inner.client = Some(client);
-        self.auth_states
-            .lock()
+        *inner = TelegramInner {
+            client: Some(client),
+            ..TelegramInner::default()
+        };
+        self.online.store(false, Ordering::Release);
+        auth_states.insert(client.raw(), starting_status());
+        client
+    }
+
+    /// The live client and where its sign-in stands, read from TDLib itself.
+    async fn started_client(&self) -> Result<(TdlibClientId, TelegramAuthStatus), CommandError> {
+        let client = self.ensure_client().await;
+        // A new client stays silent until its first request.
+        functions::set_log_verbosity_level(2, client.raw())
             .await
-            .insert(client.raw(), starting_status());
-        Ok(client)
+            .map_err(map_tdlib_error)?;
+        let state = functions::get_authorization_state(client.raw())
+            .await
+            .map_err(map_tdlib_error)?;
+        let status = status_from_authorization(state);
+        self.restore_status(client, status.clone()).await;
+        Ok((client, status))
+    }
+
+    /// Reconnects the session an earlier sign-in saved. Runs once per launch, and
+    /// every command that needs the session waits for it.
+    async fn resumed(&self) {
+        self.resumed
+            .get_or_init(|| async {
+                if let Err(error) = self.resume().await {
+                    *self.resume_failure.lock().await = Some(format!(
+                        "Could not reconnect the saved Telegram session: {}",
+                        error.message
+                    ));
+                }
+            })
+            .await;
+    }
+
+    async fn resume(&self) -> Result<(), CommandError> {
+        let Some(key) = self.api_key.key_to_resume()? else {
+            return Ok(());
+        };
+        let (client, status) = self.started_client().await?;
+        if matches!(status.phase, TelegramAuthPhase::WaitParameters) {
+            self.apply_api_key(client, key).await?;
+        }
+        self.settled_status(client).await.map(drop)
     }
 
     async fn client(&self) -> Result<TdlibClientId, CommandError> {
@@ -104,6 +178,9 @@ impl TelegramState {
     }
 
     async fn current_status(&self) -> TelegramAuthStatus {
+        if let Some(failure) = self.resume_failure.lock().await.clone() {
+            return error_status(failure);
+        }
         let inner = self.inner.lock().await;
         let Some(client) = inner.client else {
             return idle_status();
@@ -121,10 +198,33 @@ impl TelegramState {
         status
     }
 
+    /// Where the sign-in stands once the saved session has had its chance to
+    /// reconnect. A sign-in that reached Ready only after its wait timed out
+    /// learns here who is signed in.
+    async fn known_status(&self) -> Result<TelegramAuthStatus, CommandError> {
+        self.resumed().await;
+        let status = self.current_status().await;
+        let (client, identified) = {
+            let inner = self.inner.lock().await;
+            (inner.client, inner.current_user_id.is_some())
+        };
+        match client {
+            Some(client) if matches!(status.phase, TelegramAuthPhase::Ready) && !identified => {
+                self.settled_status(client).await
+            }
+            Some(_) if matches!(status.phase, TelegramAuthPhase::Ready) => {
+                // Saves a key the keychain refused at sign-in.
+                self.api_key.signed_in()?;
+                Ok(status)
+            }
+            _ => Ok(status),
+        }
+    }
+
     pub(super) async fn ready_context(
         &self,
     ) -> Result<(TelegramAuthStatus, TdlibClientId, i64), CommandError> {
-        let auth = self.current_status().await;
+        let auth = self.known_status().await?;
         if !matches!(auth.phase, TelegramAuthPhase::Ready) {
             return Err(CommandError::msg("Telegram is not authenticated"));
         }
@@ -139,6 +239,72 @@ impl TelegramState {
         Ok((auth, client, current_user_id))
     }
 
+    /// The signed-in account, once the saved session has had its chance to reconnect.
+    pub async fn signed_in_account(&self) -> Result<Option<String>, CommandError> {
+        let status = self.known_status().await?;
+        Ok(match status.phase {
+            TelegramAuthPhase::Ready => status.account_label,
+            _ => None,
+        })
+    }
+
+    /// Ends the session on Telegram's side, then removes what it left on this
+    /// device. Without a connection nothing changes, so the session never lingers
+    /// half-closed.
+    pub async fn log_out(&self) -> Result<(), CommandError> {
+        let _one_at_a_time = self.signing_out.lock().await;
+        self.resumed().await;
+        let client = self.inner.lock().await.client;
+        let Some(client) = client else {
+            // No session opened in this launch, so none can be ended. TDLib's folder
+            // stays: it may hold a session that only signing in again can close.
+            *self.resume_failure.lock().await = None;
+            return self.api_key.signed_out();
+        };
+        self.close_client(client).await?;
+        // Until the folder is gone the closed client stays, so another try removes it.
+        match std::fs::remove_dir_all(&self.root_dir) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+            _ => {}
+        }
+        *self.inner.lock().await = TelegramInner::default();
+        *self.resume_failure.lock().await = None;
+        self.api_key.signed_out()
+    }
+
+    async fn close_client(&self, client: TdlibClientId) -> Result<(), CommandError> {
+        let closed = self
+            .auth_states
+            .lock()
+            .await
+            .get(&client.raw())
+            .is_some_and(|status| matches!(status.phase, TelegramAuthPhase::Closed));
+        if closed {
+            return Ok(());
+        }
+        let state = functions::get_authorization_state(client.raw())
+            .await
+            .map_err(map_tdlib_error)?;
+        let request = match state {
+            enums::AuthorizationState::Closed => return Ok(()),
+            // Nothing is signed in yet, so there is no session to end on the server.
+            enums::AuthorizationState::WaitTdlibParameters => functions::close(client.raw()).await,
+            enums::AuthorizationState::Ready if !self.online.load(Ordering::Acquire) => {
+                return Err(CommandError::msg(
+                    "Telegram is unreachable. Sign out again once the connection is back.",
+                ));
+            }
+            _ => functions::log_out(client.raw()).await,
+        };
+        request.map_err(map_tdlib_error)?;
+        self.wait_until(client, |status| {
+            matches!(status.phase, TelegramAuthPhase::Closed)
+        })
+        .await
+        .map(drop)
+        .ok_or_else(|| CommandError::msg("Telegram is still signing out. Try again in a moment."))
+    }
+
     async fn mark_starting(&self, client: TdlibClientId) {
         self.auth_states
             .lock()
@@ -151,9 +317,48 @@ impl TelegramState {
         self.auth_states.lock().await.insert(client.raw(), status);
     }
 
+    /// Hands TDLib the API pair; it opens the saved session, if there is one.
+    async fn apply_api_key(&self, client: TdlibClientId, key: ApiKey) -> Result<(), CommandError> {
+        self.mark_starting(client).await;
+        if let Err(error) = set_tdlib_parameters(self, client, &key).await {
+            let waiting = status_from_authorization(enums::AuthorizationState::WaitTdlibParameters);
+            self.restore_status(client, waiting).await;
+            return Err(error);
+        }
+        self.api_key.entered(key);
+        Ok(())
+    }
+
+    /// Where the sign-in stands after a step; once it is done, records who signed in
+    /// and keeps the API pair for the next launch.
+    async fn settled_status(
+        &self,
+        client: TdlibClientId,
+    ) -> Result<TelegramAuthStatus, CommandError> {
+        let status = self.wait_for_auth_update(client).await;
+        if !matches!(status.phase, TelegramAuthPhase::Ready) {
+            return Ok(status);
+        }
+        self.fill_account_label(client).await?;
+        self.api_key.signed_in()?;
+        Ok(self.current_status().await)
+    }
+
     async fn wait_for_auth_update(&self, client: TdlibClientId) -> TelegramAuthStatus {
+        self.wait_until(client, |status| status.message != STARTING_MESSAGE)
+            .await
+            .unwrap_or_else(|| {
+                error_status("Timed out waiting for TDLib authorization state.".into())
+            })
+    }
+
+    async fn wait_until(
+        &self,
+        client: TdlibClientId,
+        done: impl Fn(&TelegramAuthStatus) -> bool,
+    ) -> Option<TelegramAuthStatus> {
         let started = std::time::Instant::now();
-        loop {
+        while started.elapsed() <= AUTH_WAIT {
             let status = self
                 .auth_states
                 .lock()
@@ -161,19 +366,12 @@ impl TelegramState {
                 .get(&client.raw())
                 .cloned()
                 .unwrap_or_else(starting_status);
-            if status.message != STARTING_MESSAGE {
-                return status;
-            }
-            if started.elapsed() > AUTH_WAIT {
-                return TelegramAuthStatus {
-                    phase: TelegramAuthPhase::Error,
-                    message: "Timed out waiting for TDLib authorization state.".into(),
-                    account_label: None,
-                    confirmation_link: None,
-                };
+            if done(&status) {
+                return Some(status);
             }
             tokio::time::sleep(Duration::from_millis(80)).await;
         }
+        None
     }
 
     async fn fill_account_label(&self, client: TdlibClientId) -> Result<(), CommandError> {
@@ -203,7 +401,7 @@ impl TelegramState {
 pub async fn telegram_scope_status(
     state: State<'_, TelegramState>,
 ) -> Result<TelegramScopeStatus, CommandError> {
-    let auth = state.current_status().await;
+    let auth = state.known_status().await?;
     let client = state.inner.lock().await.client;
 
     if !matches!(auth.phase, TelegramAuthPhase::Ready) {
@@ -250,37 +448,25 @@ pub async fn telegram_auth_start(
     if req.phone_number.trim().is_empty() {
         return Err(CommandError::msg("Telegram phone number is required"));
     }
+    state.resumed().await;
+    // A sign-out in progress finishes first, so this does not start on a closing client.
+    drop(state.signing_out.lock().await);
+    state.resume_failure.lock().await.take();
 
-    let client = state.ensure_client().await?;
-    functions::set_log_verbosity_level(2, client.raw())
-        .await
-        .map_err(map_tdlib_error)?;
-
-    let mut status = state.wait_for_auth_update(client).await;
-    if matches!(status.phase, TelegramAuthPhase::Starting) && status.message.contains("parameters")
-    {
-        if req.api_id <= 0 {
-            return Err(CommandError::msg("Telegram api_id must be positive"));
-        }
-        if req.api_hash.trim().is_empty() {
-            return Err(CommandError::msg("Telegram api_hash is required"));
-        }
-        state.mark_starting(client).await;
-        set_tdlib_parameters(&state, client, req.api_id, req.api_hash).await?;
-        status = state.wait_for_auth_update(client).await;
+    let (client, status) = state.started_client().await?;
+    if matches!(status.phase, TelegramAuthPhase::WaitParameters) {
+        let key = ApiKey::checked(req.api_id, req.api_hash)?;
+        state.apply_api_key(client, key).await?;
     }
-
-    if matches!(status.phase, TelegramAuthPhase::Ready) {
-        state.fill_account_label(client).await?;
-        return Ok(state.current_status().await);
-    }
+    let status = state.settled_status(client).await?;
 
     // TDLib also accepts a new number while it waits for a code or password.
-    let accepts_phone = status.message.contains("phone number")
-        || matches!(
-            status.phase,
-            TelegramAuthPhase::WaitCode | TelegramAuthPhase::WaitPassword
-        );
+    let accepts_phone = matches!(
+        status.phase,
+        TelegramAuthPhase::WaitPhoneNumber
+            | TelegramAuthPhase::WaitCode
+            | TelegramAuthPhase::WaitPassword
+    );
     if !accepts_phone {
         return Ok(status);
     }
@@ -292,14 +478,7 @@ pub async fn telegram_auth_start(
         state.restore_status(client, status).await;
         return Err(map_tdlib_error(error));
     }
-    status = state.wait_for_auth_update(client).await;
-
-    if matches!(status.phase, TelegramAuthPhase::Ready) {
-        state.fill_account_label(client).await?;
-        return Ok(state.current_status().await);
-    }
-
-    Ok(status)
+    state.settled_status(client).await
 }
 
 #[tauri::command]
@@ -312,12 +491,7 @@ pub async fn telegram_auth_code(
     functions::check_authentication_code(req.code, client.raw())
         .await
         .map_err(map_tdlib_error)?;
-    let status = state.wait_for_auth_update(client).await;
-    if matches!(status.phase, TelegramAuthPhase::Ready) {
-        state.fill_account_label(client).await?;
-        return Ok(state.current_status().await);
-    }
-    Ok(status)
+    state.settled_status(client).await
 }
 
 #[tauri::command]
@@ -330,12 +504,7 @@ pub async fn telegram_auth_password(
     functions::check_authentication_password(req.password, client.raw())
         .await
         .map_err(map_tdlib_error)?;
-    let status = state.wait_for_auth_update(client).await;
-    if matches!(status.phase, TelegramAuthPhase::Ready) {
-        state.fill_account_label(client).await?;
-        return Ok(state.current_status().await);
-    }
-    Ok(status)
+    state.settled_status(client).await
 }
 
 /// Longest FLOOD_WAIT worth sitting through; anything longer surfaces as an error.
@@ -436,8 +605,7 @@ pub async fn telegram_start_run(
 async fn set_tdlib_parameters(
     state: &TelegramState,
     client: TdlibClientId,
-    api_id: i32,
-    api_hash: String,
+    key: &ApiKey,
 ) -> Result<(), CommandError> {
     std::fs::create_dir_all(&state.root_dir)?;
     let database_dir = state.root_dir.join("db");
@@ -458,8 +626,8 @@ async fn set_tdlib_parameters(
         true,
         true,
         false,
-        api_id,
-        api_hash,
+        key.api_id,
+        key.api_hash.clone(),
         "en".into(),
         "Untrace Desktop".into(),
         std::env::consts::OS.into(),
@@ -499,13 +667,13 @@ pub(super) fn parse_chat_id(chat_id: &str) -> Result<i64, CommandError> {
 fn status_from_authorization(state: enums::AuthorizationState) -> TelegramAuthStatus {
     match state {
         enums::AuthorizationState::WaitTdlibParameters => TelegramAuthStatus {
-            phase: TelegramAuthPhase::Starting,
+            phase: TelegramAuthPhase::WaitParameters,
             message: "TDLib is waiting for initialization parameters.".into(),
             account_label: None,
             confirmation_link: None,
         },
         enums::AuthorizationState::WaitPhoneNumber => TelegramAuthStatus {
-            phase: TelegramAuthPhase::Starting,
+            phase: TelegramAuthPhase::WaitPhoneNumber,
             message: "TDLib is ready for the phone number.".into(),
             account_label: None,
             confirmation_link: None,
@@ -534,6 +702,14 @@ fn status_from_authorization(state: enums::AuthorizationState) -> TelegramAuthSt
             account_label: None,
             confirmation_link: None,
         },
+        enums::AuthorizationState::LoggingOut | enums::AuthorizationState::Closing => {
+            TelegramAuthStatus {
+                phase: TelegramAuthPhase::SigningOut,
+                message: "Signing out of Telegram.".into(),
+                account_label: None,
+                confirmation_link: None,
+            }
+        }
         enums::AuthorizationState::Closed => TelegramAuthStatus {
             phase: TelegramAuthPhase::Closed,
             message: "Telegram client is closed.".into(),
@@ -558,6 +734,15 @@ fn starting_status() -> TelegramAuthStatus {
     }
 }
 
+fn error_status(message: String) -> TelegramAuthStatus {
+    TelegramAuthStatus {
+        phase: TelegramAuthPhase::Error,
+        message,
+        account_label: None,
+        confirmation_link: None,
+    }
+}
+
 fn idle_status() -> TelegramAuthStatus {
     TelegramAuthStatus {
         phase: TelegramAuthPhase::Idle,
@@ -569,4 +754,36 @@ fn idle_status() -> TelegramAuthStatus {
 
 fn map_tdlib_error(error: tdlib_rs::types::Error) -> CommandError {
     CommandError::msg(format!("TDLib {}: {}", error.code, error.message))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use enums::AuthorizationState as Td;
+
+    fn phase(state: Td) -> TelegramAuthPhase {
+        status_from_authorization(state).phase
+    }
+
+    #[test]
+    fn the_form_can_tell_whether_tdlib_still_needs_the_api_key() {
+        assert!(matches!(
+            phase(Td::WaitTdlibParameters),
+            TelegramAuthPhase::WaitParameters
+        ));
+        assert!(matches!(
+            phase(Td::WaitPhoneNumber),
+            TelegramAuthPhase::WaitPhoneNumber
+        ));
+    }
+
+    #[test]
+    fn signing_out_is_a_step_on_the_way_to_closed() {
+        assert!(matches!(
+            phase(Td::LoggingOut),
+            TelegramAuthPhase::SigningOut
+        ));
+        assert!(matches!(phase(Td::Closing), TelegramAuthPhase::SigningOut));
+        assert!(matches!(phase(Td::Closed), TelegramAuthPhase::Closed));
+    }
 }

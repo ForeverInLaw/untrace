@@ -8,6 +8,7 @@ import {
   type StartRunRequest,
   type BackupRequest,
 } from "../lib/tauri";
+import { useSessionRefresh } from "./telegram";
 
 const PREVIEW_PAGE_SIZE = 100;
 const RECEIPT_POLL_MS = 500;
@@ -25,12 +26,16 @@ export function useAccountsQuery() {
   return useQuery({ queryKey: ["accounts"], queryFn: api.listAccounts });
 }
 
-export function useDisconnectAccountMutation() {
-  const queryClient = useQueryClient();
+/// Disconnecting Telegram ends its live session, so its status refreshes too.
+export function useDisconnectAccountMutation(accountRemoved: (platform: string, label: string) => void) {
+  const refresh = useSessionRefresh();
   return useMutation({
     mutationKey: ["accounts", "disconnect"],
     mutationFn: api.disconnectAccount,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+    onSuccess: (_, account) => {
+      accountRemoved(account.platform, account.label);
+      return refresh();
+    },
   });
 }
 

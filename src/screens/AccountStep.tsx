@@ -1,10 +1,10 @@
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Notice, Screen, TextField } from "../components/ui";
+import { Button, ConfirmButton, Notice, Screen, TextField } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import type { TelegramAuthStatus } from "../lib/tauri";
 import { usePlatformsQuery } from "../queries/platforms";
-import { useAccountsQuery, useConnectAccountMutation } from "../queries/runs";
+import { useAccountsQuery, useConnectAccountMutation, useDisconnectAccountMutation } from "../queries/runs";
 import {
   useTelegramAuthCodeMutation,
   useTelegramAuthPasswordMutation,
@@ -155,13 +155,19 @@ function TelegramConnect() {
   const start = useTelegramAuthStartMutation();
   const code = useTelegramAuthCodeMutation();
   const password = useTelegramAuthPasswordMutation();
+  const logOut = useDisconnectAccountMutation(useFlowStore((s) => s.accountRemoved));
 
   const auth = status.data?.auth;
   const phase = auth?.phase ?? "idle";
+  const label = auth?.account_label ?? "Telegram";
   const signingIn = phase === "wait_code" || phase === "wait_password";
+  // TDLib takes the API pair once per client, so after that only the phone can change.
+  const keyTaken = signingIn || phase === "wait_phone_number" || phase === "wait_other_device_confirmation";
   const needsSecret = signingIn && !changingDetails;
-  const pending = start.isPending || code.isPending || password.isPending;
-  const failure = errorMessage(start.error ?? code.error ?? password.error ?? status.error) ?? (phase === "error" ? auth?.message : null);
+  const pending = start.isPending || code.isPending || password.isPending || logOut.isPending;
+  const failure =
+    errorMessage(start.error ?? code.error ?? password.error ?? logOut.error ?? status.error) ??
+    (phase === "error" ? auth?.message : null);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -181,17 +187,86 @@ function TelegramConnect() {
   const submitLabel = needsSecret ? secretLabel : t("account.connect");
   const canSubmit = needsSecret
     ? secret.length > 0
-    : Boolean(phone.trim() && (signingIn || (apiId.trim() && apiHash.trim())));
+    : Boolean(phone.trim() && (keyTaken || (apiId.trim() && apiHash.trim())));
+
+  const body = () => {
+    if (status.isPending) {
+      return <p className="help">{t("account.telegram.connecting")}</p>;
+    }
+    if (phase === "signing_out") {
+      return <p className="help">{t("account.telegram.signingOut")}</p>;
+    }
+    if (ready) {
+      return <p className="help">{t("account.telegram.ready", { label })}</p>;
+    }
+    return (
+      <form id={CONNECT_FORM} onSubmit={onSubmit}>
+        <div className="form-grid form-grid--three">
+          {!keyTaken && (
+            <>
+              <TextField
+                inputMode="numeric"
+                label={t("account.telegram.apiId")}
+                onChange={(event) => setApiId(event.target.value)}
+                value={apiId}
+              />
+              <TextField
+                autoComplete="off"
+                label={t("account.telegram.apiHash")}
+                onChange={(event) => setApiHash(event.target.value)}
+                type="password"
+                value={apiHash}
+              />
+            </>
+          )}
+          <TextField
+            autoComplete="tel"
+            disabled={needsSecret}
+            label={t("account.telegram.phone")}
+            onChange={(event) => setPhone(event.target.value)}
+            type="tel"
+            value={phone}
+          />
+        </div>
+        {!keyTaken && <p className="help">{t("account.telegram.help")}</p>}
+        {auth && needsSecret && <TelegramSecretField auth={auth} onChange={setSecret} value={secret} />}
+        {auth?.confirmation_link && (
+          <p className="help">
+            {t("account.telegram.otherDevice")}: <a href={auth.confirmation_link}>{auth.confirmation_link}</a>
+          </p>
+        )}
+      </form>
+    );
+  };
 
   return (
     <Screen
       actions={
         ready ? (
-          <Button kind="primary" onClick={() => chooseAccount(auth?.account_label ?? "Telegram")}>
-            {t("account.telegram.continue")}
-          </Button>
+          <>
+            <ConfirmButton
+              confirmLabel={t("account.telegram.confirmLogOut")}
+              disabled={logOut.isPending}
+              onConfirm={() => logOut.mutate({ platform: "telegram", label })}
+            >
+              {t("account.telegram.logOut")}
+            </ConfirmButton>
+            <Button disabled={logOut.isPending} kind="primary" onClick={() => chooseAccount(label)}>
+              {t("account.telegram.continue")}
+            </Button>
+          </>
         ) : (
           <>
+            {/* TDLib keeps the API pair for the whole client; only a reset swaps it. */}
+            {phase === "wait_phone_number" && (
+              <ConfirmButton
+                confirmLabel={t("account.telegram.confirmChangeKey")}
+                disabled={pending}
+                onConfirm={() => logOut.mutate({ platform: "telegram", label })}
+              >
+                {t("account.telegram.changeKey")}
+              </ConfirmButton>
+            )}
             {needsSecret && (
               <Button onClick={() => setChangingDetails(true)}>{t("account.telegram.changeDetails")}</Button>
             )}
@@ -205,45 +280,7 @@ function TelegramConnect() {
       note={t("account.telegram.note")}
     >
       <PlatformChoice />
-      {ready ? (
-        <p className="help">{t("account.telegram.ready", { label: auth?.account_label ?? "Telegram" })}</p>
-      ) : (
-        <form id={CONNECT_FORM} onSubmit={onSubmit}>
-          <div className="form-grid form-grid--three">
-            {/* TDLib takes the API pair once per client, so only the phone can change mid sign-in. */}
-            <TextField
-              disabled={signingIn}
-              inputMode="numeric"
-              label={t("account.telegram.apiId")}
-              onChange={(event) => setApiId(event.target.value)}
-              value={apiId}
-            />
-            <TextField
-              autoComplete="off"
-              disabled={signingIn}
-              label={t("account.telegram.apiHash")}
-              onChange={(event) => setApiHash(event.target.value)}
-              type="password"
-              value={apiHash}
-            />
-            <TextField
-              autoComplete="tel"
-              disabled={needsSecret}
-              label={t("account.telegram.phone")}
-              onChange={(event) => setPhone(event.target.value)}
-              type="tel"
-              value={phone}
-            />
-          </div>
-          <p className="help">{t("account.telegram.help")}</p>
-          {auth && needsSecret && <TelegramSecretField auth={auth} onChange={setSecret} value={secret} />}
-          {auth?.confirmation_link && (
-            <p className="help">
-              {t("account.telegram.otherDevice")}: <a href={auth.confirmation_link}>{auth.confirmation_link}</a>
-            </p>
-          )}
-        </form>
-      )}
+      {body()}
       {failure && <Notice tone="fault">{failure}</Notice>}
     </Screen>
   );

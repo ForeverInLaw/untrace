@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
+import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes, useState } from "react";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   kind?: "primary" | "secondary";
@@ -6,6 +6,30 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ kind = "secondary", className = "", type = "button", ...props }: ButtonProps) {
   return <button className={`button button--${kind} ${className}`} type={type} {...props} />;
+}
+
+interface ConfirmButtonProps extends Omit<ButtonProps, "onClick" | "onBlur" | "onKeyDown"> {
+  confirmLabel: string;
+  onConfirm: () => void;
+}
+
+/// Acts on the second press. The first one asks again in the button itself; moving
+/// focus away or pressing Escape takes the question back.
+export function ConfirmButton({ confirmLabel, onConfirm, children, ...props }: ConfirmButtonProps) {
+  const [armed, setArmed] = useState(false);
+  return (
+    <Button
+      {...props}
+      onBlur={() => setArmed(false)}
+      onClick={() => {
+        setArmed(!armed);
+        if (armed) onConfirm();
+      }}
+      onKeyDown={(event) => event.key === "Escape" && setArmed(false)}
+    >
+      {armed ? confirmLabel : children}
+    </Button>
+  );
 }
 
 type BoxProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;

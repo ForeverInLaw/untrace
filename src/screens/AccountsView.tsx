@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Button, Notice, Screen } from "../components/ui";
+import { Button, ConfirmButton, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { usePlatformsQuery } from "../queries/platforms";
 import { useAccountsQuery, useDisconnectAccountMutation } from "../queries/runs";
@@ -8,10 +8,10 @@ import { useFlowStore } from "../stores/flowStore";
 export function AccountsView() {
   const { t } = useTranslation();
   const accounts = useAccountsQuery();
-  const disconnect = useDisconnectAccountMutation();
+  const disconnect = useDisconnectAccountMutation(useFlowStore((s) => s.accountRemoved));
   const platforms = usePlatformsQuery().data ?? [];
   const startOver = useFlowStore((s) => s.startOver);
-  // Starting over would drop the screen of a deletion that keeps running.
+  // Starting over or disconnecting would drop the screen of a deletion that keeps running.
   const running = useFlowStore((s) => s.step === "run");
   const rows = accounts.data ?? [];
 
@@ -30,9 +30,13 @@ export function AccountsView() {
               <strong>{account.label}</strong>
               <small>{platforms.find((item) => item.id === account.platform)?.display_name ?? account.platform}</small>
             </span>
-            <Button disabled={disconnect.isPending} onClick={() => disconnect.mutate(account)}>
+            <ConfirmButton
+              confirmLabel={t("accounts.confirmDisconnect")}
+              disabled={running || disconnect.isPending}
+              onConfirm={() => disconnect.mutate(account)}
+            >
               {t("accounts.disconnect")}
-            </Button>
+            </ConfirmButton>
           </li>
         ))}
       </ul>

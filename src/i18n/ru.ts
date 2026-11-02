@@ -4,6 +4,10 @@ export const ru = {
   "nav.accounts": "Аккаунты",
   "nav.recent": "Последние чистки",
   "nav.noAccount": "Аккаунт не подключён",
+  "nav.accountsConnected_one": "Подключён {{count, number}} аккаунт",
+  "nav.accountsConnected_few": "Подключено {{count, number}} аккаунта",
+  "nav.accountsConnected_many": "Подключено {{count, number}} аккаунтов",
+  "nav.accountsConnected_other": "Подключено {{count, number}} аккаунта",
   "nav.language": "Язык интерфейса",
 
   "cleanup.number": "Чистка № {{number}}",
@@ -59,6 +63,12 @@ export const ru = {
   "account.telegram.changeDetails": "Изменить данные",
   "account.telegram.ready": "Подключён {{label}}",
   "account.telegram.continue": "Продолжить",
+  "account.telegram.connecting": "Подключение к Telegram…",
+  "account.telegram.logOut": "Выйти",
+  "account.telegram.confirmLogOut": "Выйти из Telegram?",
+  "account.telegram.signingOut": "Выход из Telegram…",
+  "account.telegram.changeKey": "Другой ключ API",
+  "account.telegram.confirmChangeKey": "Забыть этот ключ API?",
 
   "scope.heading": "Что удалить с {{account}}?",
   "scope.types": "Типы записей",
@@ -255,5 +265,6 @@ export const ru = {
   "accounts.lead": "Данные для входа хранятся только на этом устройстве.",
   "accounts.empty": "Подключённых аккаунтов нет.",
   "accounts.disconnect": "Отключить",
+  "accounts.confirmDisconnect": "Точно отключить?",
   "accounts.add": "Подключить аккаунт",
 } as const;
