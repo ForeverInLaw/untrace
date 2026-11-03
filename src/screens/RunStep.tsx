@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Clock } from "lucide-react";
+import { Clock, WifiOff } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { Seal } from "../components/Seal";
 import { Button, Notice, Screen } from "../components/ui";
@@ -85,6 +85,7 @@ export function RunStep() {
   const paused = useRunStore((s) => s.paused);
   const setPaused = useRunStore((s) => s.setPaused);
   const waitSecs = useRunStore((s) => s.throttleWaitSecs);
+  const offline = useRunStore((s) => s.offline);
   const reset = useRunStore((s) => s.reset);
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId)?.display_name ?? platformId;
   const pause = usePauseRunMutation();
@@ -134,6 +135,11 @@ export function RunStep() {
       {waitSecs !== null && (
         <Notice icon={<Clock aria-hidden="true" size={16} />} tone="caution">
           {t("run.throttled", { platform, seconds: waitSecs })}
+        </Notice>
+      )}
+      {offline && (
+        <Notice icon={<WifiOff aria-hidden="true" size={16} />} tone="caution">
+          {t("run.offline", { platform })}
         </Notice>
       )}
       {failure && <Notice tone="fault">{failure}</Notice>}
