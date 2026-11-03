@@ -9,6 +9,7 @@ import { usePlatformsQuery } from "../queries/platforms";
 import { usePauseRunMutation, useResumeRunMutation, useStopRunMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { useRunStore } from "../stores/runStore";
+import { RunChatResults } from "./ChatCounts";
 
 const SEAL_SIZE = 240;
 
@@ -136,6 +137,7 @@ export function RunStep() {
         </Notice>
       )}
       {failure && <Notice tone="fault">{failure}</Notice>}
+      <RunChatResults ended={status === "error"} runId={runId} />
       <figure className="run-seal">
         <Seal drawn={sealDrawn} runId={runId} size={SEAL_SIZE} />
       </figure>

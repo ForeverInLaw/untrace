@@ -7,9 +7,15 @@ import { Button, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
-import { useLatestExport, useReceiptQuery, useReceiptsQuery, useVerifyBackupMutation } from "../queries/runs";
+import {
+  useLatestExport,
+  useReceiptQuery,
+  useReceiptsQuery,
+  useVerifyBackupMutation,
+} from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { useRunStore } from "../stores/runStore";
+import { RunChatResults } from "./ChatCounts";
 import { BackupExportResult, BackupPassphraseField, ExportBackupButton, useBackupPassphrase } from "./BackupExport";
 import { UnsavedFilesSection } from "./UnsavedFilesSection";
 
@@ -153,6 +159,8 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
           </figcaption>
         </figure>
       </div>
+      {/* Kept before the receipt, so once the receipt is there these are too. */}
+      <RunChatResults ended={hasReceipt} runId={runId} />
       <UnsavedFilesSection account={summary.account_label} platformId={summary.platform} runId={runId} />
     </Screen>
   );

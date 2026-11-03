@@ -63,17 +63,10 @@ export interface TelegramAuthStatus {
   confirmation_link: string | null;
 }
 
-export interface TelegramScopeRule {
-  kind: TelegramScopeKind;
-  label: string;
-  cleanability: string;
-}
-
 export interface TelegramChatSummary {
   id: string;
   title: string;
   kind: TelegramScopeKind;
-  cleanability: string;
   last_message_id: string | null;
 }
 
@@ -86,7 +79,6 @@ export interface TelegramScopeStatus {
   available: boolean;
   blocker: string;
   auth: TelegramAuthStatus;
-  rules: TelegramScopeRule[];
   chats: TelegramChatSummary[];
 }
 
@@ -207,6 +199,19 @@ export interface BackupSpace {
   needed: number;
   available: number;
   fits: boolean;
+}
+
+/// How many items a previewed run would delete from one chat.
+export interface ScopeCount {
+  scope_id: string;
+  items: number;
+}
+
+/// What a finished run deleted and failed to delete in one chat.
+export interface ScopeOutcome {
+  scope_id: string;
+  deleted: number;
+  failed: number;
 }
 
 export interface PreviewSummary extends PreviewCounts {
@@ -342,6 +347,9 @@ export const api = {
   previewSummary: (runId: string) => invoke<PreviewSummary>("preview_summary", { runId }),
   previewBackupSpace: (runId: string, consent: RunConsent) =>
     invoke<BackupSpace>("preview_backup_space", { runId, consent }),
+  previewScopes: (runId: string, consent: RunConsent) =>
+    invoke<ScopeCount[]>("preview_scopes", { runId, consent }),
+  runScopeResults: (runId: string) => invoke<ScopeOutcome[]>("run_scope_results", { runId }),
   previewItems: (req: PreviewItemsRequest) => invoke<PreviewItem[]>("preview_items", { ...req }),
   setItemProtected: (runId: string, platformId: string, isProtected: boolean) =>
     invoke<boolean>("set_item_protected", { runId, platformId, protected: isProtected }),

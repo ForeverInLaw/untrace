@@ -70,6 +70,25 @@ export function useBackupSpaceQuery(runId: string, consent: RunConsent) {
   });
 }
 
+/// The chats a run would delete from with these agreements, largest first.
+export function usePreviewScopesQuery(runId: string, consent: RunConsent) {
+  return useQuery({
+    queryKey: ["preview", runId, "scopes", consent],
+    queryFn: () => api.previewScopes(runId, consent),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/// What a run did per chat. Known only for a run finished since the app started.
+export function useRunScopeResultsQuery(runId: string, enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryKey: ["runs", runId, "scope-results"],
+    queryFn: () => api.runScopeResults(runId),
+    staleTime: Infinity,
+  });
+}
+
 export function usePreviewItemsQuery(runId: string, group: ItemGroup, contentType: ContentType | null) {
   return useInfiniteQuery({
     queryKey: ["preview", runId, "items", group, contentType],

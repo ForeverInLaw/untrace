@@ -5,10 +5,11 @@ import { errorMessage } from "../lib/errors";
 import { useByteFormat, useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
 import type { RunConsent } from "../lib/tauri";
-import { useBackupSpaceQuery, usePreviewSummaryQuery, useStartRunMutation } from "../queries/runs";
+import { useBackupSpaceQuery, usePreviewScopesQuery, usePreviewSummaryQuery, useStartRunMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { useRunStore } from "../stores/runStore";
 import { NewBackupPassphraseField } from "./BackupExport";
+import { ChatCounts } from "./ChatCounts";
 
 function usePeriodLabel() {
   const { t } = useTranslation();
@@ -59,6 +60,10 @@ export function BackupStep() {
   const summary = summaryQuery.data;
   const spaceQuery = useBackupSpaceQuery(runId, consent);
   const space = spaceQuery.data;
+  const scopesQuery = usePreviewScopesQuery(runId, consent);
+  const scopes = scopesQuery.data ?? [];
+  // Not before the chat list for these boxes is in, nor when it failed to load.
+  const scopesShown = scopesQuery.isSuccess && !scopesQuery.isPlaceholderData;
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId)?.display_name ?? platformId;
   const start = useStartRunMutation(platformId, apply);
   const period = usePeriodLabel();
@@ -72,7 +77,7 @@ export function BackupStep() {
     (deleteIncomplete || deleteForSelf ? 0 : summary?.consents_overlap ?? 0);
   const deleting = (summary?.pending ?? 0) - kept;
   const types = summary?.types.map(({ content_type: type }) => t(`contentType.${type}`).toLowerCase()).join(", ");
-  const error = errorMessage(start.error ?? summaryQuery.error ?? spaceQuery.error);
+  const error = errorMessage(start.error ?? summaryQuery.error ?? spaceQuery.error ?? scopesQuery.error);
   const formatBytes = useByteFormat();
 
   // Changing what goes also changes the count that was confirmed.
@@ -95,7 +100,7 @@ export function BackupStep() {
       actions={
         <>
           <Button onClick={() => goTo("preview")}>{t("backup.back")}</Button>
-          <Button disabled={!confirmed || start.isPending || deleting === 0 || spaceQuery.isPlaceholderData || !space?.fits} kind="primary" onClick={onStart}>
+          <Button disabled={!confirmed || start.isPending || deleting === 0 || spaceQuery.isPlaceholderData || !scopesShown || !space?.fits} kind="primary" onClick={onStart}>
             {t("backup.start", { count: deleting })}
           </Button>
         </>
@@ -138,6 +143,11 @@ export function BackupStep() {
           )}
         </dl>
       </section>
+      <ChatCounts
+        columns={[t("backup.willDelete")]}
+        heading={t("backup.chats")}
+        rows={scopes.map(({ scope_id: chatId, items }) => ({ chatId, cells: [{ value: items, tone: "goes" }] }))}
+      />
       {space?.fits === false && (
         <Notice tone="fault">
           {t("backup.notEnoughSpace", { needed: formatBytes(space.needed), available: formatBytes(space.available) })}

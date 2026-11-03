@@ -1331,11 +1331,13 @@ small {
   }
 }
 
-.unsaved {
+.unsaved,
+.chat-counts {
   margin-top: 28px;
 }
 
-.unsaved__rows {
+.unsaved__rows,
+.chat-counts__rows {
   max-height: 320px;
 }
 
