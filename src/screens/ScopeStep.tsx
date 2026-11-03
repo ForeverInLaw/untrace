@@ -196,7 +196,7 @@ function TelegramScope() {
   const knownCounts = chatIds.map((id) => counts[id]).filter((count) => typeof count === "number");
   const messages = knownCounts.reduce((sum, count) => sum + count, 0);
   const filter = toFilterRequest(draft, available);
-  const error = errorMessage(dryRun.error ?? status.error) ?? (status.data?.blocker || null);
+  const error = errorMessage(dryRun.error ?? status.error ?? status.data?.blocker);
   const selectionNote = knownCounts.length === chatIds.length
     ? t("chats.selected", { chats: chatIds.length, messages })
     : t("chats.selectedUnknown", { chats: chatIds.length });

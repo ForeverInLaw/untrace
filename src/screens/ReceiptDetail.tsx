@@ -37,7 +37,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   const format = useDateFormat();
   const queryClient = useQueryClient();
   const flowPassphrase = useFlowStore((s) => s.passphrase);
-  const runFailure = useRunStore((s) => s.message);
+  const runFailure = useRunStore((s) => s.failure);
   const { passphrase, setPassphrase, backupPassphrase } = useBackupPassphrase(flowPassphrase);
   const receiptQuery = useReceiptQuery(runId);
   const receipt = receiptQuery.data;
@@ -78,7 +78,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   );
 
   if (!receipt) {
-    const failure = errorMessage(receiptQuery.error) ?? runFailure;
+    const failure = errorMessage(receiptQuery.error ?? runFailure);
     return (
       <Screen actions={actions} heading={t(receiptQuery.isError ? "receipt.loadFailed" : "receipt.waiting")}>
         {failure && <Notice tone="fault">{failure}</Notice>}

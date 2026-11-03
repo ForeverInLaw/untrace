@@ -16,7 +16,7 @@ import {
   type ContentType,
   type ItemGroup,
   type PreviewItem,
-  type ProgressEvent,
+  type RunEvent,
   type RunConsent,
   type StartRunRequest,
   type BackupRequest,
@@ -156,9 +156,9 @@ export function useDryRunMutation() {
 }
 
 /// Starts the previewed run on whichever engine the platform uses.
-export function useStartRunMutation(platformId: string, onEvent: (event: ProgressEvent) => void) {
+export function useStartRunMutation(platformId: string, onEvent: (event: RunEvent) => void) {
   const queryClient = useQueryClient();
-  const handleEvent = (event: ProgressEvent) => {
+  const handleEvent = (event: RunEvent) => {
     onEvent(event);
     if (event.event === "error") {
       void queryClient.invalidateQueries({ queryKey: ["interrupted-runs"] });
@@ -189,7 +189,7 @@ interface RetryUnsavedFiles {
 /// `onOpened` runs once the engine has accepted it, just before it starts.
 export function useRetryUnsavedFilesMutation(
   platformId: string,
-  onEvent: (event: ProgressEvent) => void,
+  onEvent: (event: RunEvent) => void,
   onOpened: () => void,
 ) {
   const start = useStartRunMutation(platformId, onEvent);

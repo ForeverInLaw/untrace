@@ -77,7 +77,7 @@ export function RunStep() {
   const goTo = useFlowStore((s) => s.goTo);
   const startOver = useFlowStore((s) => s.startOver);
   const status = useRunStore((s) => s.status);
-  const message = useRunStore((s) => s.message);
+  const runFailure = useRunStore((s) => s.failure);
   const deleted = useRunStore((s) => s.deleted);
   const skipped = useRunStore((s) => s.skipped);
   const failed = useRunStore((s) => s.failed);
@@ -94,7 +94,7 @@ export function RunStep() {
   const handled = deleted + skipped + failed;
   // The seal only grows with what is really gone, so a failing run leaves it unfinished.
   const sealDrawn = total > 0 ? Math.min(deleted / total, 1) : 0;
-  const failure = status === "error" ? message : errorMessage(pause.error ?? resume.error ?? stop.error);
+  const failure = errorMessage(status === "error" ? runFailure : (pause.error ?? resume.error ?? stop.error));
 
   useEffect(() => {
     if (status === "done") {
