@@ -400,29 +400,37 @@ pub(crate) async fn execute_previewed_run(
     consent: RunConsent,
     on_event: Channel<ProgressEvent>,
 ) -> Result<(), CommandError> {
-    // Checked before the backup target, which writes key files for the run.
-    if !run_reads::backup_space_for(state, &run_id, consent).await?.fits {
-        return Err(CommandError::msg("not enough free disk space for the backup"));
-    }
-    // Load keys/backup target up front: never start deleting what we cannot seal.
-    let signer = secrets::receipt_signer()?;
-    let backup = backup::backup_target(
-        &state.backup_dir,
-        &run_id,
-        backup_passphrase
-            .as_deref()
-            .filter(|passphrase| !passphrase.is_empty()),
-    )?;
-
-    let started = now_secs();
-    state
-        .reader
-        .lock()
-        .await
-        .set_run_started(&run_id, started as i64)?;
-
+    // Claimed first, so a second start of a live run is refused before it writes a
+    // key over the one the running backup needs. Given back if the run cannot start.
     let control = RunControl::new();
     claim_run_slot(&mut *state.controls.lock().await, &run_id, control.clone())?;
+    let prepared = async {
+        // Checked before the backup target, which writes key files for the run.
+        if !run_reads::backup_space_for(state, &run_id, consent).await?.fits {
+            return Err(CommandError::msg("not enough free disk space for the backup"));
+        }
+        // Load keys/backup target up front: never start deleting what we cannot seal.
+        let signer = secrets::receipt_signer()?;
+        let backup = backup::backup_target(
+            &state.backup_dir,
+            &run_id,
+            backup_passphrase
+                .as_deref()
+                .filter(|passphrase| !passphrase.is_empty()),
+        )?;
+        let started = now_secs();
+        state
+            .reader
+            .lock()
+            .await
+            .set_run_started(&run_id, started as i64)?;
+        Ok((signer, backup, started))
+    }
+    .await;
+    if prepared.is_err() {
+        state.controls.lock().await.remove(&run_id);
+    }
+    let (signer, backup, started) = prepared?;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<ProgressEvent>();
     // Forward engine events to the frontend channel until the run drops `tx`.
