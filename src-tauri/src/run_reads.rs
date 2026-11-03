@@ -140,6 +140,7 @@ pub async fn preview_items(
     run_id: String,
     group: ItemGroup,
     content_type: Option<ContentType>,
+    search: String,
     offset: u32,
     limit: u32,
 ) -> Result<Vec<PreviewItem>, CommandError> {
@@ -149,6 +150,7 @@ pub async fn preview_items(
         &ItemQuery {
             group,
             content_type,
+            search: &search,
             offset,
             limit,
         },

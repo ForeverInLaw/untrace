@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ShieldCheck } from "lucide-react";
+import { Search, ShieldCheck } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { Button, Checkbox, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
@@ -85,9 +85,17 @@ function OutOfReachRow({ item }: { item: PreviewItem }) {
   );
 }
 
-function ItemsTable({ runId, filter, undeletable }: { runId: string; filter: Filter; undeletable: number }) {
+interface ItemsTableProps {
+  runId: string;
+  filter: Filter;
+  /// Trimmed text the rows must contain; blank lists them all.
+  search: string;
+  undeletable: number;
+}
+
+function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
   const { t } = useTranslation();
-  const items = usePreviewItemsQuery(runId, filter.group, filter.type);
+  const items = usePreviewItemsQuery(runId, filter.group, filter.type, search);
   const rows = items.data?.pages.flat() ?? [];
 
   return (
@@ -113,13 +121,15 @@ function ItemsTable({ runId, filter, undeletable }: { runId: string; filter: Fil
       </table>
       {items.isSuccess && rows.length === 0 && (
         <p className="empty">
-          {t(
-            filter.group === "protected"
-              ? "preview.emptyProtected"
-              : undeletable > 0 && filter.group === "all" && filter.type === null
-                ? "preview.emptyUndeletable"
-                : "preview.empty",
-          )}
+          {search
+            ? t("preview.notFound", { search })
+            : t(
+                filter.group === "protected"
+                  ? "preview.emptyProtected"
+                  : undeletable > 0 && filter.group === "all" && filter.type === null
+                    ? "preview.emptyUndeletable"
+                    : "preview.empty",
+              )}
         </p>
       )}
       {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
@@ -184,6 +194,7 @@ export function PreviewStep() {
   const runId = useFlowStore((s) => s.runId) ?? "";
   const goTo = useFlowStore((s) => s.goTo);
   const [filter, setFilter] = useState<Filter>(ALL);
+  const [search, setSearch] = useState("");
   const summaryQuery = usePreviewSummaryQuery(runId);
   const summary = summaryQuery.data;
   const saving = useIsSavingProtection(runId);
@@ -210,6 +221,17 @@ export function PreviewStep() {
     >
       {summaryQuery.isError && <Notice tone="fault">{errorMessage(summaryQuery.error)}</Notice>}
       {summary && <DeleteReachFacts summary={summary} />}
+      <label className="search">
+        <Search aria-hidden="true" size={15} />
+        <input
+          aria-label={t("preview.search")}
+          className="input search__input"
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={t("preview.search")}
+          type="search"
+          value={search}
+        />
+      </label>
       <fieldset aria-label={t("preview.filterLabel")} className="chips">
         <Chip filter={ALL} onSelect={setFilter} selected={filter}>
           {t("preview.all")} <span>{count(pending)}</span>
@@ -240,7 +262,7 @@ export function PreviewStep() {
           </Chip>
         )}
       </fieldset>
-      <ItemsTable filter={filter} runId={runId} undeletable={undeletable} />
+      <ItemsTable filter={filter} runId={runId} search={search.trim()} undeletable={undeletable} />
     </Screen>
   );
 }

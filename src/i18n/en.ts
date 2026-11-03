@@ -125,6 +125,8 @@ export const en = {
   "preview.empty": "Nothing matched the conditions, so there is nothing to delete.",
   "preview.emptyUndeletable": "Everything that matched is out of your reach: the platform won't let this account delete it.",
   "preview.emptyProtected": "No protected items.",
+  "preview.search": "Search by text",
+  "preview.notFound": "Nothing found for “{{search}}”.",
   "preview.limit": "Untrace can't reach copies in other people's archives and search caches.",
   "preview.editScope": "Change conditions",
   "preview.next": "Next: backup",

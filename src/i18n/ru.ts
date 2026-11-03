@@ -131,6 +131,8 @@ export const ru = {
   "preview.empty": "Под условия ничего не попало, удалять нечего.",
   "preview.emptyUndeletable": "Всё, что подошло под условия, платформа не даёт удалить этому аккаунту.",
   "preview.emptyProtected": "Защищённых записей нет.",
+  "preview.search": "Поиск по тексту",
+  "preview.notFound": "Ничего не нашлось по запросу «{{search}}».",
   "preview.limit": "Копии в чужих архивах и кеше поисковиков Untrace удалить не может.",
   "preview.editScope": "Изменить условия",
   "preview.next": "Дальше: резервная копия",

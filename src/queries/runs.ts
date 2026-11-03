@@ -89,12 +89,20 @@ export function useRunScopeResultsQuery(runId: string, enabled: boolean) {
   });
 }
 
-export function usePreviewItemsQuery(runId: string, group: ItemGroup, contentType: ContentType | null) {
+/// Keeps the rows on screen while a new filter or search loads, so typing does not
+/// blank the table.
+export function usePreviewItemsQuery(
+  runId: string,
+  group: ItemGroup,
+  contentType: ContentType | null,
+  search: string,
+) {
   return useInfiniteQuery({
-    queryKey: ["preview", runId, "items", group, contentType],
+    queryKey: ["preview", runId, "items", group, contentType, search],
     initialPageParam: 0,
+    placeholderData: keepPreviousData,
     queryFn: ({ pageParam }) =>
-      api.previewItems({ runId, group, contentType, offset: pageParam, limit: PREVIEW_PAGE_SIZE }),
+      api.previewItems({ runId, group, contentType, search, offset: pageParam, limit: PREVIEW_PAGE_SIZE }),
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === PREVIEW_PAGE_SIZE ? pages.length * PREVIEW_PAGE_SIZE : undefined,
   });
