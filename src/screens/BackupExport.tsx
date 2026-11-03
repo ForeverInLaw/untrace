@@ -3,7 +3,13 @@ import { useTranslation } from "react-i18next";
 import { Button, Notice, TextField } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useByteFormat } from "../lib/format";
-import { useExportBackupMutation, useIsExporting, useLatestExport, useStopExportMutation } from "../queries/runs";
+import {
+  useBackupNeedsPassphraseQuery,
+  useExportBackupMutation,
+  useIsExporting,
+  useLatestExport,
+  useStopExportMutation,
+} from "../queries/runs";
 import { useExportStore } from "../stores/exportStore";
 
 /// The backup password a screen is holding, as its backup commands want it.
@@ -17,8 +23,12 @@ interface BackupPassphraseFieldProps {
   onChange: (value: string) => void;
 }
 
-export function BackupPassphraseField({ value, onChange }: BackupPassphraseFieldProps) {
+/// The password for `runId`'s backup, shown only when that backup was written with one.
+export function BackupPassphraseField({ runId, value, onChange }: BackupPassphraseFieldProps & { runId: string }) {
   const { t } = useTranslation();
+  if (!useBackupNeedsPassphraseQuery(runId).data) {
+    return null;
+  }
   return (
     <TextField
       autoComplete="off"

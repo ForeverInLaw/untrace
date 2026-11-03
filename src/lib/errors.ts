@@ -5,6 +5,17 @@ function isCommandError(error: object): error is CommandError {
   return "code" in error && typeof error.code === "string" && "message" in error;
 }
 
+/// Whether a backup turned down the password it was given, or got none: the
+/// backup itself may be fine.
+export function isPassphraseRefusal(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    isCommandError(error) &&
+    (error.code === "wrong_passphrase" || error.code === "passphrase_needed")
+  );
+}
+
 /// Words any failure in the interface language: a command's or a run's by its code,
 /// with the details its sentence needs. One without a sentence of its own, such as a
 /// thrown value, reads as a general failure with its text as the details.

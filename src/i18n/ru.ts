@@ -296,7 +296,9 @@ export const ru = {
   "receipt.signature": "Подпись",
   "receipt.copySignature": "Скопировать подпись",
   "receipt.signed": "Подписано на этом устройстве",
-  "receipt.passphrase": "Пароль копии, если задавали",
+  "receipt.passphrase": "Пароль копии",
+  "receipt.export": "Сохранить квитанцию",
+  "receipt.exported": "Квитанция сохранена в {{path}}. Её подпись можно проверить и без Untrace.",
   "receipt.verify": "Проверить копию",
   "receipt.newCleanup": "Новая чистка",
 
@@ -335,6 +337,7 @@ export const ru = {
   "errors.another_run_is_live": "Другая чистка ещё идёт. Дождитесь её окончания и попробуйте снова.",
   "errors.no_disk_space": "Для резервной копии не хватает места на диске. Освободите место и попробуйте снова.",
   "errors.wrong_passphrase": "Неверный пароль копии. Проверьте его и попробуйте ещё раз.",
+  "errors.passphrase_needed": "Копия защищена паролем. Введите его и попробуйте ещё раз.",
   "errors.backup_write_failed": "Не удалось записать резервную копию, поэтому чистка остановлена. Проверьте место на диске и запустите её заново.",
   "errors.keychain_unavailable": "Нет доступа к системной связке ключей. Разблокируйте её и попробуйте снова.",
   "errors.telegram_not_connected": "Telegram не подключён. Войдите заново на шаге выбора аккаунта.",

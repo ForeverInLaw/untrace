@@ -163,6 +163,14 @@ export function useReceiptsQuery() {
   return useQuery({ queryKey: ["receipts"], queryFn: api.listReceipts });
 }
 
+/// Saves `runId`'s signed receipt to a file the person chooses.
+export function useExportReceiptMutation(runId: string) {
+  return useMutation({
+    mutationKey: ["receipts", "export", runId],
+    mutationFn: () => api.exportReceipt(runId),
+  });
+}
+
 export function useInterruptedRunsQuery() {
   return useQuery({ queryKey: ["interrupted-runs"], queryFn: api.listInterruptedRuns });
 }
@@ -273,6 +281,15 @@ export function useVerifyBackupMutation() {
   return useMutation({
     mutationKey: ["backups", "verify"],
     mutationFn: (req: BackupRequest) => api.verifyBackup(req),
+  });
+}
+
+/// A backup written with a passphrase opens only with it, so its field shows up front.
+export function useBackupNeedsPassphraseQuery(runId: string) {
+  return useQuery({
+    queryKey: ["backups", "needs-passphrase", runId],
+    queryFn: () => api.backupNeedsPassphrase(runId),
+    staleTime: Infinity,
   });
 }
 

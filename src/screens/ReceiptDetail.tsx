@@ -4,11 +4,11 @@ import { Check, Copy } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { Seal } from "../components/Seal";
 import { Button, Notice, Screen } from "../components/ui";
-import { errorMessage } from "../lib/errors";
+import { errorMessage, isPassphraseRefusal } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
 import {
-  useLatestExport,
+  useExportReceiptMutation,
   useReceiptQuery,
   useReceiptsQuery,
   useVerifyBackupMutation,
@@ -48,12 +48,13 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   const index = receipts.findIndex(({ summary }) => summary.run_id === runId);
   const number = index >= 0 ? receipts.length - index : receipts.length + 1;
   const verified = verify.data?.ok === true;
-  const verifyFailed = verify.isError || verify.data?.ok === false;
+  // A refused password says nothing about the backup, so its line stays unchecked.
+  const verifyFailed = (verify.isError && !isPassphraseRefusal(verify.error)) || verify.data?.ok === false;
   const copySignature = useMutation({
     mutationFn: (signature: string) => navigator.clipboard.writeText(signature),
   });
+  const exportReceipt = useExportReceiptMutation(runId);
   const hasReceipt = Boolean(receipt);
-  const exportFailed = useLatestExport(runId)?.status === "error";
 
   // The list in the sidebar learns about the new receipt once it has landed.
   useEffect(() => {
@@ -66,6 +67,9 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
     <>
       <Button kind={verified ? "primary" : "secondary"} onClick={exit.onClick}>{exit.label}</Button>
       <ExportBackupButton backupPassphrase={backupPassphrase} disabled={!receipt} runId={runId} />
+      <Button disabled={!receipt || exportReceipt.isPending} onClick={() => exportReceipt.mutate()}>
+        {t("receipt.export")}
+      </Button>
       {!verified && (
         <Button
           disabled={!receipt || verify.isPending}
@@ -148,7 +152,9 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
               </dd>
             </div>
           </dl>
-          {(verifyFailed || exportFailed) && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
+          {exportReceipt.data && <Notice tone="safe">{t("receipt.exported", { path: exportReceipt.data })}</Notice>}
+          {exportReceipt.isError && <Notice tone="fault">{errorMessage(exportReceipt.error)}</Notice>}
+          <BackupPassphraseField onChange={setPassphrase} runId={runId} value={passphrase} />
           {verify.isError && <Notice tone="fault">{errorMessage(verify.error)}</Notice>}
           <BackupExportResult runId={runId} />
         </div>

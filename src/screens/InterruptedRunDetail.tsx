@@ -3,7 +3,6 @@ import { Button, Notice, Screen } from "../components/ui";
 import { useDateFormat } from "../lib/format";
 import type { InterruptedRun } from "../lib/tauri";
 import { usePlatformsQuery } from "../queries/platforms";
-import { useLatestExport } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { BackupExportResult, BackupPassphraseField, ExportBackupButton, useBackupPassphrase } from "./BackupExport";
 import { RunChatResults } from "./ChatCounts";
@@ -20,7 +19,6 @@ export function InterruptedRunDetail({ run, exit }: InterruptedRunDetailProps) {
   const format = useDateFormat();
   const flowPassphrase = useFlowStore((s) => s.passphrase);
   const { passphrase, setPassphrase, backupPassphrase } = useBackupPassphrase(flowPassphrase);
-  const exportFailed = useLatestExport(run.run_id)?.status === "error";
   const platform = usePlatformsQuery().data?.find((item) => item.id === run.platform)?.display_name ?? run.platform;
 
   return (
@@ -42,7 +40,7 @@ export function InterruptedRunDetail({ run, exit }: InterruptedRunDetailProps) {
         <div><dt>{t("receipt.started")}</dt><dd>{format.moment(run.started_epoch_secs)}</dd></div>
         <div><dt>{t("receipt.deleted")}</dt><dd>{t("cleanup.plainNumber", { value: run.deleted })}</dd></div>
       </dl>
-      {exportFailed && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
+      <BackupPassphraseField onChange={setPassphrase} runId={run.run_id} value={passphrase} />
       <BackupExportResult runId={run.run_id} />
       <RunChatResults ended runId={run.run_id} />
       <UnsavedFilesSection account={run.account_label} platformId={run.platform} runId={run.run_id} />

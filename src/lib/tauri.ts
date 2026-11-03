@@ -14,6 +14,7 @@ export type CommandError = { message: string } & (
         | "another_run_is_live"
         | "no_disk_space"
         | "wrong_passphrase"
+        | "passphrase_needed"
         | "backup_write_failed"
         | "keychain_unavailable"
         | "telegram_not_connected"
@@ -395,6 +396,7 @@ export const api = {
       runId: req.runId,
       backupPassphrase: req.backupPassphrase,
     }),
+  backupNeedsPassphrase: (runId: string) => invoke<boolean>("backup_needs_passphrase", { runId }),
 
   /// Streams how far it is over a Tauri Channel until it ends.
   exportBackup: (req: BackupRequest, onProgress: (progress: ExportProgress) => void) => {
@@ -424,6 +426,8 @@ export const api = {
     invoke<ChoiceCounts>("preview_choice", { runId, filter }),
   listReceipts: () => invoke<Receipt[]>("list_receipts"),
   getReceipt: (runId: string) => invoke<Receipt | null>("get_receipt", { runId }),
+  /// Where the receipt file went, or null when the person closed the save dialog.
+  exportReceipt: (runId: string) => invoke<string | null>("export_receipt", { runId }),
   listInterruptedRuns: () => invoke<InterruptedRun[]>("list_interrupted_runs"),
   listAccounts: () => invoke<StoredAccount[]>("list_accounts"),
   disconnectAccount: (account: StoredAccount) => invoke<void>("disconnect_account", { ...account }),

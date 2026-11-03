@@ -268,7 +268,9 @@ export const en = {
   "receipt.signature": "Signature",
   "receipt.copySignature": "Copy signature",
   "receipt.signed": "Signed on this device",
-  "receipt.passphrase": "Backup password, if you set one",
+  "receipt.passphrase": "Backup password",
+  "receipt.export": "Save receipt",
+  "receipt.exported": "Receipt saved to {{path}}. Anyone can check its signature without Untrace.",
   "receipt.verify": "Verify backup",
   "receipt.newCleanup": "New cleanup",
 
@@ -305,6 +307,7 @@ export const en = {
   "errors.another_run_is_live": "Another cleanup is still running. Wait for it to finish and try again.",
   "errors.no_disk_space": "Not enough disk space for the backup. Free up some space and try again.",
   "errors.wrong_passphrase": "Wrong backup password. Check it and try again.",
+  "errors.passphrase_needed": "This backup is protected by a password. Enter it and try again.",
   "errors.backup_write_failed": "The backup could not be written, so the cleanup stopped. Check the free disk space and start it again.",
   "errors.keychain_unavailable": "The system keychain cannot be reached. Unlock it and try again.",
   "errors.telegram_not_connected": "Telegram is not signed in. Sign in again on the account step.",

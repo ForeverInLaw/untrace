@@ -27,6 +27,7 @@ use lethe_core::filter::FilterSpec;
 use lethe_core::pipeline::{self, RunRequest};
 use lethe_core::scheduler::Scheduler;
 use lethe_core::{ProgressEvent, RunControl};
+use lethe_crypto::receipt::ReceiptFile;
 use lethe_store::{Consents, NewRun, ScopeOutcome, Store};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
@@ -509,6 +510,42 @@ async fn verify_backup(
     backup::verify_backup(&state.backup_dir, &run_id, backup_passphrase.as_deref())
 }
 
+#[tauri::command]
+async fn backup_needs_passphrase(state: State<'_, AppState>, run_id: String) -> Result<bool, CommandError> {
+    Ok(backup::needs_passphrase(&state.backup_dir, &run_id))
+}
+
+/// Saves the run's signed receipt where the person chooses, as a file anyone can
+/// check without the app. `None` when they close the choice. Off the async
+/// runtime, because the file dialog blocks until the person answers.
+#[tauri::command]
+async fn export_receipt(
+    window: tauri::Window,
+    state: State<'_, AppState>,
+    run_id: String,
+) -> Result<Option<String>, CommandError> {
+    let stored = state.reader.lock().await.receipt(&run_id)?;
+    let stored = stored.ok_or_else(|| CommandError::msg("this run has no receipt"))?;
+    let file = ReceiptFile::new(stored.summary_json, stored.public_key_hex, stored.signature_hex);
+    let text = serde_json::to_string_pretty(&file)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let chosen = window
+            .dialog()
+            .file()
+            .set_parent(&window)
+            .set_file_name(format!("untrace-receipt-{run_id}.json"))
+            .add_filter("JSON", &["json"])
+            .blocking_save_file();
+        let Some(chosen) = chosen else {
+            return Ok(None);
+        };
+        let path = chosen.into_path().map_err(|e| CommandError::msg(e.to_string()))?;
+        fs::write(&path, text)?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    })
+    .await?
+}
+
 /// Off the async runtime, because decrypting a large backup takes a while and the
 /// folder dialog blocks until the person answers. Progress goes over `on_progress`
 /// until the export ends; `stop_export` stops it.
@@ -687,7 +724,9 @@ pub fn run() {
             retry_unsaved_files,
             discard_retry,
             verify_backup,
+            backup_needs_passphrase,
             export_backup,
+            export_receipt,
             stop_export,
             pause_run,
             resume_run,

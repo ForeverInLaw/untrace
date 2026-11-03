@@ -197,6 +197,12 @@ pub fn export_backup(
     }))
 }
 
+/// Whether the run's backup opens only with the passphrase it was written with,
+/// rather than with the key in the keychain.
+pub fn needs_passphrase(base_dir: &Path, run_id: &str) -> bool {
+    backup_path(base_dir, run_id).with_extension(BACKUP_KEY_META_EXT).exists()
+}
+
 fn open_backup(
     base_dir: &Path,
     run_id: &str,
@@ -205,6 +211,10 @@ fn open_backup(
     let path = backup_path(base_dir, run_id);
     let key = match backup_passphrase.filter(|passphrase| !passphrase.is_empty()) {
         Some(passphrase) => unwrap_passphrase_backup_key(&path, passphrase)?,
+        // The keychain key would only fail to decrypt it, which reads as damage.
+        None if needs_passphrase(base_dir, run_id) => {
+            return Err(CommandError::new(ErrorKind::PassphraseNeeded, "this backup needs its passphrase"));
+        }
         None => backup_data_key()?,
     };
     let file = fs::File::open(&path).map_err(|e| {
@@ -407,6 +417,28 @@ mod tests {
         );
 
         assert_eq!(result.err().map(|error| error.kind), Some(ErrorKind::WrongPassphrase));
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_backup_with_a_passphrase_asks_for_it_rather_than_failing_to_decrypt() {
+        let dir = test_dir("backup-locked");
+        write_backup(&dir, "correct horse");
+
+        assert!(needs_passphrase(&dir, "r1"));
+        for missing in [None, Some("")] {
+            let refused = verify_backup(&dir, "r1", missing).err().map(|error| error.kind);
+            assert_eq!(refused, Some(ErrorKind::PassphraseNeeded));
+        }
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_backup_under_the_keychain_key_needs_no_passphrase() {
+        let dir = test_dir("backup-keychain");
+        fs::write(backup_path(&dir, "r1"), b"sealed").unwrap();
+
+        assert!(!needs_passphrase(&dir, "r1"));
         fs::remove_dir_all(dir).ok();
     }
 
