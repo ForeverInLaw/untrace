@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Search, ShieldCheck } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
+import { useDebounce } from "use-debounce";
 import { Button, Checkbox, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
@@ -195,6 +196,9 @@ export function PreviewStep() {
   const goTo = useFlowStore((s) => s.goTo);
   const [filter, setFilter] = useState<Filter>(ALL);
   const [search, setSearch] = useState("");
+  // Each search scans the run in the store and cannot be called off, so it waits
+  // for a pause in typing.
+  const [searched] = useDebounce(search.trim(), 300);
   const summaryQuery = usePreviewSummaryQuery(runId);
   const summary = summaryQuery.data;
   const saving = useIsSavingProtection(runId);
@@ -262,7 +266,7 @@ export function PreviewStep() {
           </Chip>
         )}
       </fieldset>
-      <ItemsTable filter={filter} runId={runId} search={search.trim()} undeletable={undeletable} />
+      <ItemsTable filter={filter} runId={runId} search={searched} undeletable={undeletable} />
     </Screen>
   );
 }
