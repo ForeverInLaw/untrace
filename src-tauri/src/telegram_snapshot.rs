@@ -22,7 +22,7 @@ use tokio::sync::watch;
 use super::{own_message_page, parse_chat_id, TelegramState};
 use crate::telegram::TelegramDryRunRequest;
 use crate::{
-    now_secs, run_filters, run_offthread, AppState, CommandError, DryRunResult, PendingRun,
+    new_run_id, now_secs, run_filters, run_offthread, AppState, CommandError, DryRunResult, PendingRun,
 };
 
 /// TDLib's upper bound for one search page.
@@ -59,7 +59,7 @@ pub async fn telegram_dry_run_chats(
     let filter = run_filters::to_filter_spec(&req.filter)?;
     let filter_json = serde_json::to_string(&req.filter)?;
     let adapter = snapshot_items_for_chats(client, current_user_id, &chat_ids, state.connection()).await?;
-    let run_id = format!("telegram-{}", now_secs());
+    let run_id = new_run_id("telegram");
 
     let run_req = RunRequest {
         run_id: run_id.clone(),

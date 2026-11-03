@@ -245,7 +245,7 @@ async fn dry_run(
     let filter_json = serde_json::to_string(&req.filter)?;
     let plan = run_filters::plan_from_filter(&filter);
     let adapter = authed_adapter(&state, &req.platform, &req.account_label).await?;
-    let run_id = format!("{}-{}", req.platform, now_secs());
+    let run_id = new_run_id(&req.platform);
 
     let run_req = RunRequest {
         run_id: run_id.clone(),
@@ -340,7 +340,7 @@ async fn retry_unsaved_files(
     if !state.controls.lock().await.is_empty() {
         return Err(CommandError::another_run_is_live());
     }
-    let retry_id = format!("retry-{}", now_secs());
+    let retry_id = new_run_id("retry");
     let retry = state
         .reader
         .lock()
@@ -587,6 +587,12 @@ async fn stop_run(state: State<'_, AppState>, run_id: String) -> Result<(), Comm
     Ok(())
 }
 
+/// An id no other run has: `kind`, the second the run opened, which keeps backups
+/// in order by name, and a random part, as two runs can open in the same second.
+fn new_run_id(kind: &str) -> String {
+    format!("{kind}-{}-{}", now_secs(), uuid::Uuid::new_v4().simple())
+}
+
 fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -705,6 +711,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runs_opened_in_the_same_second_get_ids_of_their_own() {
+        let (first, second) = (new_run_id("retry"), new_run_id("retry"));
+
+        assert_ne!(first, second);
+        assert!(first.starts_with("retry-"));
+    }
 
     #[test]
     fn a_run_reports_progress_as_the_engine_words_it_and_its_failure_with_a_code() {

@@ -29,6 +29,7 @@ futures.workspace = true
 thiserror.workspace = true
 keyring.workspace = true
 time = "0.3"
+uuid = { version = "1", features = ["v4"] }
 
 lethe-adapter.workspace = true
 lethe-net.workspace = true
