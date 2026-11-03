@@ -699,6 +699,8 @@ pub fn run() {
             run_reads::run_scope_results,
             run_reads::preview_items,
             run_reads::set_item_protected,
+            run_reads::set_items_protected,
+            run_reads::preview_choice,
             run_reads::list_receipts,
             run_reads::get_receipt,
             run_reads::list_interrupted_runs,

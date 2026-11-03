@@ -34,8 +34,20 @@ export function ConfirmButton({ confirmLabel, onConfirm, children, ...props }: C
 
 type BoxProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
 
-export function Checkbox({ className = "", ...props }: BoxProps) {
-  return <input className={`checkbox ${className}`} type="checkbox" {...props} />;
+/// `indeterminate` shows a dash: some of what the box stands for is ticked, not all.
+export function Checkbox({ className = "", indeterminate = false, ...props }: BoxProps & { indeterminate?: boolean }) {
+  return (
+    <input
+      className={`checkbox ${className}`}
+      ref={(box) => {
+        if (box) {
+          box.indeterminate = indeterminate;
+        }
+      }}
+      type="checkbox"
+      {...props}
+    />
+  );
 }
 
 export function CheckboxLabel({ children, ...props }: BoxProps & { children: ReactNode }) {

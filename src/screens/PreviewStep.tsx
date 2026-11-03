@@ -10,9 +10,12 @@ import { useItemText } from "../lib/itemText";
 import type { ContentType, ItemGroup, PreviewItem, PreviewSummary } from "../lib/tauri";
 import {
   useIsSavingProtection,
+  usePreviewChoiceQuery,
+  usePreviewFilter,
   usePreviewItemsQuery,
   usePreviewSummaryQuery,
   useSetItemProtectedMutation,
+  useSetItemsProtectedMutation,
 } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 
@@ -105,15 +108,30 @@ interface ItemsTableProps {
 
 function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
   const { t } = useTranslation();
-  const items = usePreviewItemsQuery(runId, filter.group, filter.type, search);
+  const listed = usePreviewFilter(filter.group, filter.type, search);
+  const items = usePreviewItemsQuery(runId, listed);
+  const choice = usePreviewChoiceQuery(runId, listed);
+  const chooseAll = useSetItemsProtectedMutation(runId);
   const rows = items.data?.pages.flat() ?? [];
+  const { going, kept } = choice.data ?? { going: 0, kept: 0 };
 
   return (
     <div className="table-scroll">
       <table className="table">
         <thead>
           <tr>
-            <th aria-label={t("preview.toggleRow")} className="cell-check" />
+            <th className="cell-check">
+              {filter.group !== "undeletable" && (
+                // A mixed set is kept whole first: no row goes by one stray click.
+                <Checkbox
+                  aria-label={t("preview.toggleAll")}
+                  checked={going > 0 && kept === 0}
+                  disabled={going + kept === 0 || chooseAll.isPending}
+                  indeterminate={going > 0 && kept > 0}
+                  onChange={() => chooseAll.mutate({ filter: listed, isProtected: going > 0 })}
+                />
+              )}
+            </th>
             <th>{t("preview.text")}</th>
             <th className="cell-meta">{t("preview.type")}</th>
             <th className="cell-date">{t("preview.date")}</th>
@@ -143,6 +161,7 @@ function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
         </p>
       )}
       {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
+      {chooseAll.isError && <Notice tone="fault">{errorMessage(chooseAll.error)}</Notice>}
       <MoreRows query={items} />
     </div>
   );

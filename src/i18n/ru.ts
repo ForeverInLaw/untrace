@@ -129,6 +129,7 @@ export const ru = {
   "preview.subtypeWithText": "{{subtype}}: {{text}}",
   "preview.typeWithSize": "{{type}} · {{size}}",
   "preview.toggleRow": "Удалить эту запись",
+  "preview.toggleAll": "Удалить всё в списке",
   "table.more": "Показать ещё",
   "preview.empty": "Под условия ничего не попало, удалять нечего.",
   "preview.emptyUndeletable": "Всё, что подошло под условия, платформа не даёт удалить этому аккаунту.",
