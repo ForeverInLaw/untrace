@@ -30,3 +30,9 @@ export function useByteFormat() {
     }).format(bytes / 1024 ** step);
   };
 }
+
+/// An account name as the interface shows it. A phone number, which a Telegram
+/// account goes by, keeps only its last four digits, so screenshots don't carry it.
+export function accountName(label: string): string {
+  return /^\+\d{5,}$/.test(label) ? `+${"•".repeat(label.length - 5)}${label.slice(-4)}` : label;
+}

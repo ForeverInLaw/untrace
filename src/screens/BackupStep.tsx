@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, CheckboxLabel, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
-import { useByteFormat, useDateFormat } from "../lib/format";
+import { accountName, useByteFormat, useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
 import type { RunConsent } from "../lib/tauri";
 import { useBackupSpaceQuery, usePreviewScopesQuery, usePreviewSummaryQuery, useStartRunMutation } from "../queries/runs";
@@ -113,7 +113,7 @@ export function BackupStep() {
         <dl className="facts">
           <div>
             <dt>{t("backup.account")}</dt>
-            <dd>{platform}, {account}</dd>
+            <dd>{platform}, {account && accountName(account)}</dd>
           </div>
           <div>
             <dt>{t("backup.willDelete")}</dt>

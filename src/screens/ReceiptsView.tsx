@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Seal } from "../components/Seal";
 import { Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
-import { useDateFormat } from "../lib/format";
+import { accountName, useDateFormat } from "../lib/format";
 import { useInterruptedRunsQuery, useReceiptsQuery } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { InterruptedRunDetail } from "./InterruptedRunDetail";
@@ -34,7 +34,7 @@ function ReceiptRow({ mark, label, account, date, deleted, onOpen }: ReceiptRowP
         >
           {mark}
           <span>{label}</span>
-          <span className="muted">{account}</span>
+          <span className="muted">{accountName(account)}</span>
         </button>
       </td>
       <td className="cell-date">{date}</td>

@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { Plus, Receipt, UserRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { languages, setLanguage } from "../i18n";
+import { accountName } from "../lib/format";
 import { useAccountsQuery, useReceiptsQuery } from "../queries/runs";
 import { usePlatformsQuery } from "../queries/platforms";
 import { useFlowStore, type View } from "../stores/flowStore";
@@ -60,7 +61,7 @@ function CurrentAccount() {
       <div className="sidebar__account">
         {account ? (
           <>
-            <strong>{account}</strong>
+            <strong>{accountName(account)}</strong>
             <small>{platform?.display_name}</small>
           </>
         ) : (

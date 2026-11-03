@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Button, Notice, Screen } from "../components/ui";
-import { useDateFormat } from "../lib/format";
+import { accountName, useDateFormat } from "../lib/format";
 import type { InterruptedRun } from "../lib/tauri";
 import { usePlatformsQuery } from "../queries/platforms";
 import { useFlowStore } from "../stores/flowStore";
@@ -36,7 +36,7 @@ export function InterruptedRunDetail({ run, exit }: InterruptedRunDetailProps) {
         <Notice tone="caution">{t("receipt.onlyForSelfLine", { count: run.deleted_only_for_self })}</Notice>
       )}
       <dl className="facts facts--compact">
-        <div><dt>{t("receipt.account")}</dt><dd>{platform}, {run.account_label}</dd></div>
+        <div><dt>{t("receipt.account")}</dt><dd>{platform}, {accountName(run.account_label)}</dd></div>
         <div><dt>{t("receipt.started")}</dt><dd>{format.moment(run.started_epoch_secs)}</dd></div>
         <div><dt>{t("receipt.deleted")}</dt><dd>{t("cleanup.plainNumber", { value: run.deleted })}</dd></div>
       </dl>
