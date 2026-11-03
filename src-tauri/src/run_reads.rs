@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use lethe_adapter::ContentType;
 use lethe_crypto::receipt::RunSummary;
-use lethe_store::{ItemGroup, ItemQuery, ScopeCount, ScopeOutcome, StoredReceipt, UnsavedFiles};
+use lethe_store::{ItemGroup, ItemQuery, ScopeCount, ScopeOutcome, StoredReceipt, UnsavedCursor, UnsavedFiles};
 use serde::Serialize;
 use tauri::State;
 
@@ -300,10 +300,10 @@ pub async fn unsaved_files(
 pub async fn unsaved_items(
     state: State<'_, AppState>,
     run_id: String,
-    offset: u32,
+    after: Option<UnsavedCursor>,
     limit: u32,
 ) -> Result<Vec<UnsavedItem>, CommandError> {
-    let items = state.reader.lock().await.unsaved_items(&run_id, offset, limit)?;
+    let items = state.reader.lock().await.unsaved_items(&run_id, after.as_ref(), limit)?;
     Ok(items
         .into_iter()
         .map(|item| UnsavedItem {

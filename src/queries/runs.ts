@@ -21,6 +21,7 @@ import {
   type StartRunRequest,
   type BackupRequest,
   type ExportOutcome,
+  type UnsavedCursor,
 } from "../lib/tauri";
 import { useSubtypesNamedBy } from "../lib/itemText";
 import { useExportStore } from "../stores/exportStore";
@@ -118,13 +119,9 @@ export function usePreviewItemsQuery(
         offset: pageParam,
         limit: PAGE_SIZE,
       }),
-    getNextPageParam: nextOffset,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
   });
-}
-
-/// Where the page after `pages` starts, if a full last page says there may be one.
-function nextOffset(lastPage: unknown[], pages: unknown[][]) {
-  return lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined;
 }
 
 function protectMutationKey(runId: string) {
@@ -199,12 +196,18 @@ export function useUnsavedFilesQuery(runId: string) {
   return useQuery({ queryKey: ["unsaved-files", runId], queryFn: () => api.unsavedFiles(runId) });
 }
 
+/// Each page starts past the last row shown, so rows a retry settles meanwhile
+/// leave none out.
 export function useUnsavedItemsQuery(runId: string) {
   return useInfiniteQuery({
     queryKey: ["unsaved-files", runId, "items"],
-    initialPageParam: 0,
+    initialPageParam: null as UnsavedCursor | null,
     queryFn: ({ pageParam }) => api.unsavedItems(runId, pageParam, PAGE_SIZE),
-    getNextPageParam: nextOffset,
+    getNextPageParam: (lastPage): UnsavedCursor | undefined => {
+      // Only a full page may have more after it.
+      const last = lastPage[PAGE_SIZE - 1];
+      return last && { platform_id: last.platform_id, created_at_secs: last.created_at_secs };
+    },
   });
 }
 

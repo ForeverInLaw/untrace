@@ -215,6 +215,9 @@ export interface UnsavedItem {
   failure: "unavailable" | "unreachable";
 }
 
+/// The last row of a page of unsaved items; the next page starts past it.
+export type UnsavedCursor = Pick<UnsavedItem, "platform_id" | "created_at_secs">;
+
 /// How much stayed in a run because its files could not be saved.
 export interface UnsavedFiles {
   total: number;
@@ -374,8 +377,8 @@ export const api = {
   },
 
   unsavedFiles: (runId: string) => invoke<UnsavedFiles>("unsaved_files", { runId }),
-  unsavedItems: (runId: string, offset: number, limit: number) =>
-    invoke<UnsavedItem[]>("unsaved_items", { runId, offset, limit }),
+  unsavedItems: (runId: string, after: UnsavedCursor | null, limit: number) =>
+    invoke<UnsavedItem[]>("unsaved_items", { runId, after, limit }),
   retryUnsavedFiles: (runId: string) => invoke<DryRunResult>("retry_unsaved_files", { runId }),
   discardRetry: (runId: string) => invoke<void>("discard_retry", { runId }),
 
