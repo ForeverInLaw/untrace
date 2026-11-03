@@ -8,7 +8,6 @@ use lethe_adapter::PlatformAdapter;
 use lethe_core::ProgressEvent;
 use lethe_telegram::tdlib_bridge::{
     list_chat_scopes, search_own_messages, OwnMessagePage, TdlibClientId, TelegramChatKind,
-    TelegramCleanability,
 };
 use tauri::ipc::Channel;
 use tauri::State;
@@ -17,7 +16,7 @@ use tokio::sync::{Mutex, OnceCell};
 
 use crate::secrets::{hex_encode, keychain_data_key, SESSION_KEY_USER};
 use crate::telegram::{
-    default_rules, TelegramAuthCodeRequest, TelegramAuthPasswordRequest, TelegramAuthPhase,
+    TelegramAuthCodeRequest, TelegramAuthPasswordRequest, TelegramAuthPhase,
     TelegramAuthStartRequest, TelegramAuthStatus, TelegramChatSummary, TelegramDryRunRequest,
     TelegramScopeKind, TelegramScopeStatus,
 };
@@ -418,7 +417,6 @@ pub async fn telegram_scope_status(
             available: false,
             blocker: auth.message.clone(),
             auth,
-            rules: default_rules(),
             chats: Vec::new(),
         });
     }
@@ -428,7 +426,6 @@ pub async fn telegram_scope_status(
             available: false,
             blocker: "Telegram client is not initialized.".into(),
             auth,
-            rules: default_rules(),
             chats: Vec::new(),
         });
     };
@@ -444,7 +441,6 @@ pub async fn telegram_scope_status(
         available: true,
         blocker: String::new(),
         auth,
-        rules: default_rules(),
         chats,
     })
 }
@@ -657,11 +653,6 @@ impl From<lethe_telegram::tdlib_bridge::TelegramChatScope> for TelegramChatSumma
                 TelegramChatKind::Group => TelegramScopeKind::Group,
                 TelegramChatKind::Channel => TelegramScopeKind::Channel,
                 TelegramChatKind::Secret => TelegramScopeKind::Secret,
-            },
-            cleanability: match scope.cleanability {
-                TelegramCleanability::DeleteForEveryone => "Can delete for everyone".into(),
-                TelegramCleanability::OnlyForSelf => "Can delete only for this account".into(),
-                TelegramCleanability::NotCleanable => "Not cleanable by this account".into(),
             },
             last_message_id: scope.last_message_id.map(|id| id.to_string()),
         }

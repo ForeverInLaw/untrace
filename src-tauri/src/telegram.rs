@@ -11,20 +11,22 @@ pub const FILES_DIR: &str = "files";
 )))]
 use crate::CommandError;
 
+/// Built only with TDLib, which lists the chats.
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    not(any(
+        feature = "telegram-tdlib-docs",
+        feature = "telegram-tdlib-local",
+        feature = "telegram-tdlib-download"
+    )),
+    allow(dead_code)
+)]
 pub enum TelegramScopeKind {
     PrivateChat,
     Group,
     Channel,
     Secret,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct TelegramScopeRule {
-    pub kind: TelegramScopeKind,
-    pub label: &'static str,
-    pub cleanability: &'static str,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -60,7 +62,6 @@ pub struct TelegramChatSummary {
     pub id: String,
     pub title: String,
     pub kind: TelegramScopeKind,
-    pub cleanability: String,
     /// Changes with each new message, so the UI knows when a count is out of date.
     pub last_message_id: Option<String>,
 }
@@ -70,7 +71,6 @@ pub struct TelegramScopeStatus {
     pub available: bool,
     pub blocker: String,
     pub auth: TelegramAuthStatus,
-    pub rules: Vec<TelegramScopeRule>,
     pub chats: Vec<TelegramChatSummary>,
 }
 
@@ -96,32 +96,6 @@ pub struct TelegramDryRunRequest {
     pub chat_ids: Vec<String>,
     #[serde(default)]
     pub filter: crate::run_filters::FilterRequest,
-}
-
-pub fn default_rules() -> Vec<TelegramScopeRule> {
-    vec![
-        TelegramScopeRule {
-            kind: TelegramScopeKind::PrivateChat,
-            label: "Private chats",
-            cleanability: "Own messages can be revoked for both sides where Telegram permits it.",
-        },
-        TelegramScopeRule {
-            kind: TelegramScopeKind::Group,
-            label: "Groups",
-            cleanability:
-                "Own messages are cleanable; older messages can be limited by Telegram/admin rules.",
-        },
-        TelegramScopeRule {
-            kind: TelegramScopeKind::Channel,
-            label: "Channels",
-            cleanability: "Cleanup depends on authorship and channel permissions.",
-        },
-        TelegramScopeRule {
-            kind: TelegramScopeKind::Secret,
-            label: "Secret chats",
-            cleanability: "Secret-chat cleanup follows TDLib availability and local session state.",
-        },
-    ]
 }
 
 #[cfg(not(any(
@@ -162,7 +136,6 @@ mod fallback {
             available: false,
             blocker: "Telegram TDLib is feature-gated. Run the Tauri shell with telegram-tdlib-local or telegram-tdlib-download to authenticate.".into(),
             auth: disabled_status(),
-            rules: default_rules(),
             chats: Vec::new(),
         })
     }

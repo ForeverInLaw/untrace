@@ -63,17 +63,10 @@ export interface TelegramAuthStatus {
   confirmation_link: string | null;
 }
 
-export interface TelegramScopeRule {
-  kind: TelegramScopeKind;
-  label: string;
-  cleanability: string;
-}
-
 export interface TelegramChatSummary {
   id: string;
   title: string;
   kind: TelegramScopeKind;
-  cleanability: string;
   last_message_id: string | null;
 }
 
@@ -86,7 +79,6 @@ export interface TelegramScopeStatus {
   available: boolean;
   blocker: string;
   auth: TelegramAuthStatus;
-  rules: TelegramScopeRule[];
   chats: TelegramChatSummary[];
 }
 
