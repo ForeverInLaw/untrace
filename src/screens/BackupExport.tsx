@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Notice, TextField } from "../components/ui";
 import { errorMessage } from "../lib/errors";
-import { useExportBackupMutation } from "../queries/runs";
+import { useByteFormat } from "../lib/format";
+import { useExportBackupMutation, useIsExporting, useLatestExport, useStopExportMutation } from "../queries/runs";
+import { useExportStore } from "../stores/exportStore";
 
 /// The backup password a screen is holding, as its backup commands want it.
 export function useBackupPassphrase(initial: string) {
@@ -45,38 +47,69 @@ export function NewBackupPassphraseField({ value, onChange }: BackupPassphraseFi
   );
 }
 
-type ExportMutation = ReturnType<typeof useExportBackupMutation>;
-
 interface ExportBackupButtonProps {
-  mutation: ExportMutation;
   runId: string;
   backupPassphrase: string | null;
   kind?: "primary" | "secondary";
   disabled?: boolean;
 }
 
-export function ExportBackupButton({ mutation, runId, backupPassphrase, kind, disabled }: ExportBackupButtonProps) {
+/// Starts an export, and stops it while it is under way.
+export function ExportBackupButton({ runId, backupPassphrase, kind, disabled }: ExportBackupButtonProps) {
   const { t } = useTranslation();
+  const exportBackup = useExportBackupMutation(runId);
+  const exporting = useIsExporting(runId);
+  // The backend reports progress only once the export can be stopped.
+  const stoppable = useExportStore((s) => runId in s.progress);
+  const stop = useStopExportMutation();
+  if (exporting) {
+    return (
+      <Button disabled={!stoppable || stop.isPending} kind={kind} onClick={() => stop.mutate(runId)}>
+        {t("backup.stopExport")}
+      </Button>
+    );
+  }
   return (
-    <Button
-      disabled={disabled || mutation.isPending}
-      kind={kind}
-      onClick={() => mutation.mutate({ runId, backupPassphrase })}
-    >
-      {t(mutation.isPending ? "backup.exporting" : "backup.export")}
+    <Button disabled={disabled} kind={kind} onClick={() => exportBackup.mutate(backupPassphrase)}>
+      {t("backup.export")}
     </Button>
   );
 }
 
-/// What came of an export. A cancelled folder choice leaves nothing to say.
-export function BackupExportResult({ mutation }: { mutation: ExportMutation }) {
+/// A large backup takes a while to export, so this keeps it from looking stuck.
+function ExportProgressLine({ runId }: { runId: string }) {
   const { t } = useTranslation();
-  const result = mutation.data;
-  if (mutation.isError) {
-    return <Notice tone="fault">{errorMessage(mutation.error)}</Notice>;
+  const formatBytes = useByteFormat();
+  const progress = useExportStore((s) => s.progress[runId]);
+  if (!progress) {
+    return <p className="help">{t("backup.exporting")}</p>;
   }
-  if (!result) {
+  const { done_bytes: done, total_bytes: total } = progress;
+  return (
+    <>
+      <progress aria-label={t("backup.exportProgressLabel")} className="meter" max={total} value={done} />
+      <p className="help">{t("backup.exportProgress", { done: formatBytes(done), total: formatBytes(total) })}</p>
+    </>
+  );
+}
+
+/// How far an export is, then what came of it. A closed folder choice leaves
+/// nothing to say.
+export function BackupExportResult({ runId }: { runId: string }) {
+  const { t } = useTranslation();
+  const latest = useLatestExport(runId);
+  if (latest?.status === "pending") {
+    return <ExportProgressLine runId={runId} />;
+  }
+  if (latest?.status === "error") {
+    return <Notice tone="fault">{errorMessage(latest.error)}</Notice>;
+  }
+  const result = latest?.data;
+  if (!result || result.outcome === "no_folder") {
     return null;
+  }
+  if (result.outcome === "stopped") {
+    return <p className="help">{t("backup.exportStopped")}</p>;
   }
   const saved = t("backup.exported", { folder: result.folder, items: result.items, files: result.media_files });
   if (result.complete) {

@@ -183,6 +183,10 @@ export const en = {
 
   "backup.export": "Export backup",
   "backup.exporting": "Exporting…",
+  "backup.exportProgress": "{{done}} of {{total}} exported",
+  "backup.exportProgressLabel": "Export progress",
+  "backup.stopExport": "Stop export",
+  "backup.exportStopped": "Export stopped. Nothing of it is left on disk.",
   "backup.exported": "Saved to {{folder}}. Items: {{items, number}}, files: {{files, number}}. This folder is not encrypted.",
   "backup.exportCutOff": "The backup breaks off, so this is everything it held up to that point.",
   "backup.exportPartialFile": "{{file}} is cut short and kept as it is.",

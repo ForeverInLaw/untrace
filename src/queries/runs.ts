@@ -3,7 +3,9 @@ import {
   useInfiniteQuery,
   useIsMutating,
   useMutation,
+  useMutationState,
   useQuery,
+  type MutationState,
   useQueryClient,
 } from "@tanstack/react-query";
 import {
@@ -16,7 +18,9 @@ import {
   type RunConsent,
   type StartRunRequest,
   type BackupRequest,
+  type ExportOutcome,
 } from "../lib/tauri";
+import { useExportStore } from "../stores/exportStore";
 import { OWN_COUNTS_KEY, useSessionRefresh } from "./telegram";
 
 const PREVIEW_PAGE_SIZE = 100;
@@ -194,10 +198,53 @@ export function useVerifyBackupMutation() {
   });
 }
 
-export function useExportBackupMutation() {
+function exportMutationKey(runId: string) {
+  return ["backups", "export", runId];
+}
+
+/// Exports `runId`'s backup. Its progress lives in the export store until it ends.
+export function useExportBackupMutation(runId: string) {
+  const report = useExportStore((s) => s.report);
+  const end = useExportStore((s) => s.end);
   return useMutation({
-    mutationKey: ["backups", "export"],
-    mutationFn: (req: BackupRequest) => api.exportBackup(req),
+    mutationKey: exportMutationKey(runId),
+    // The outcome says where the unencrypted folder went, so it stays until the app closes.
+    gcTime: Infinity,
+    mutationFn: async (backupPassphrase: string | null) => {
+      // A refused second export never reports, and must not end the first one's progress.
+      let reported = false;
+      try {
+        return await api.exportBackup({ runId, backupPassphrase }, (progress) => {
+          reported = true;
+          report(runId, progress);
+        });
+      } finally {
+        if (reported) {
+          end(runId);
+        }
+      }
+    },
+  });
+}
+
+/// True while `runId`'s backup exports, from whichever screen started it.
+export function useIsExporting(runId: string) {
+  return useIsMutating({ mutationKey: exportMutationKey(runId) }) > 0;
+}
+
+/// The latest export of `runId`'s backup, still there after leaving the screen.
+export function useLatestExport(runId: string) {
+  const states = useMutationState({
+    filters: { mutationKey: exportMutationKey(runId) },
+    select: (mutation) => mutation.state as MutationState<ExportOutcome, Error, string | null>,
+  });
+  return states[states.length - 1];
+}
+
+export function useStopExportMutation() {
+  return useMutation({
+    mutationKey: ["backups", "stop-export"],
+    mutationFn: (runId: string) => api.stopExport(runId),
   });
 }
 

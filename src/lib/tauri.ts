@@ -161,6 +161,18 @@ export interface BackupExport {
   partial_file: string | null;
 }
 
+/// How an export ended. Mirrors backup::ExportOutcome.
+export type ExportOutcome =
+  | { outcome: "no_folder" }
+  | ({ outcome: "exported" } & BackupExport)
+  | { outcome: "stopped" };
+
+/// How much of the backup file an export has read.
+export interface ExportProgress {
+  done_bytes: number;
+  total_bytes: number;
+}
+
 /// A run that ended without a receipt, reachable only through its backup.
 export interface InterruptedRun {
   run_id: string;
@@ -313,12 +325,17 @@ export const api = {
       backupPassphrase: req.backupPassphrase,
     }),
 
-  /// Null when the person cancelled the folder choice.
-  exportBackup: (req: BackupRequest) =>
-    invoke<BackupExport | null>("export_backup", {
+  /// Streams how far it is over a Tauri Channel until it ends.
+  exportBackup: (req: BackupRequest, onProgress: (progress: ExportProgress) => void) => {
+    const channel = new Channel<ExportProgress>();
+    channel.onmessage = onProgress;
+    return invoke<ExportOutcome>("export_backup", {
       runId: req.runId,
       backupPassphrase: req.backupPassphrase,
-    }),
+      onProgress: channel,
+    });
+  },
+  stopExport: (runId: string) => invoke<void>("stop_export", { runId }),
 
   previewSummary: (runId: string) => invoke<PreviewSummary>("preview_summary", { runId }),
   previewBackupSpace: (runId: string, consent: RunConsent) =>

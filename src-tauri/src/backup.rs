@@ -1,8 +1,10 @@
 use std::fs;
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
 use lethe_core::archive::{audit_archive, ArchiveExport};
 use lethe_core::pipeline::BackupTarget;
+use lethe_core::EngineError;
 use lethe_crypto::container::{derive_data_key, ContainerReader, ContainerWriter};
 use lethe_crypto::DataKey;
 use lethe_store::PendingMedia;
@@ -30,6 +32,27 @@ pub struct BackupExport {
     pub complete: bool,
     pub partial_file: Option<String>,
 }
+
+/// How an export ended.
+#[derive(Debug, Serialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum ExportOutcome {
+    /// The person closed the folder choice, so nothing was written.
+    NoFolder,
+    Exported(BackupExport),
+    /// The person stopped it, and the folder it had begun is gone.
+    Stopped,
+}
+
+/// How much of the backup file an export has read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct ExportProgress {
+    pub done_bytes: u64,
+    pub total_bytes: u64,
+}
+
+/// An export tells its progress about once per this many bytes, and at the end.
+const PROGRESS_STEP: u64 = 1024 * 1024;
 
 /// Whether the disk can hold a run's backup, in bytes.
 #[derive(Debug, Serialize)]
@@ -100,20 +123,44 @@ pub fn verify_backup(
 
 /// Exports a backup into a new folder under the one `pick_folder` returns. The key
 /// is checked first, so a wrong passphrase never gets as far as asking where to
-/// export. `None` means the person cancelled the choice.
+/// export. `report` hears how far the export is: before the folder is asked for,
+/// about once per `PROGRESS_STEP`, and once the whole backup is read. `stopped`
+/// is asked after every record and every chunk of a file.
 pub fn export_backup(
     base_dir: &Path,
     run_id: &str,
     backup_passphrase: Option<&str>,
     pick_folder: impl FnOnce() -> Result<Option<PathBuf>, CommandError>,
-) -> Result<Option<BackupExport>, CommandError> {
+    mut report: impl FnMut(ExportProgress),
+    stopped: impl Fn() -> bool,
+) -> Result<ExportOutcome, CommandError> {
     let (file, key) = open_backup(base_dir, run_id, backup_passphrase)?;
+    let total_bytes = file.metadata()?.len();
     let archive = ArchiveExport::open(file, &key)?;
+    report(ExportProgress { done_bytes: 0, total_bytes });
+    if stopped() {
+        return Ok(ExportOutcome::Stopped);
+    }
     let Some(parent) = pick_folder()? else {
-        return Ok(None);
+        return Ok(ExportOutcome::NoFolder);
     };
-    let report = archive.write_to(&parent, &format!("untrace-export-{run_id}"))?;
-    Ok(Some(BackupExport {
+    let mut told = 0;
+    let written = archive.write_to(&parent, &format!("untrace-export-{run_id}"), |done_bytes| {
+        if done_bytes >= told + PROGRESS_STEP || done_bytes == total_bytes {
+            told = done_bytes;
+            report(ExportProgress { done_bytes, total_bytes });
+        }
+        if stopped() {
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        }
+    });
+    let report = match written {
+        Err(EngineError::Aborted) => return Ok(ExportOutcome::Stopped),
+        written => written?,
+    };
+    Ok(ExportOutcome::Exported(BackupExport {
         folder: report.folder.to_string_lossy().into_owned(),
         items: report.items,
         media_files: report.media_files,
@@ -265,6 +312,12 @@ mod tests {
         dir
     }
 
+    fn ignore(_: ExportProgress) {}
+
+    fn keep_going() -> bool {
+        false
+    }
+
     /// A sealed backup with one item and one file.
     fn write_backup(dir: &Path, passphrase: &str) {
         let target = backup_target(dir, "r1", Some(passphrase)).unwrap();
@@ -287,9 +340,12 @@ mod tests {
         fs::create_dir(&chosen).unwrap();
         write_backup(&dir, "correct horse");
 
-        let done = export_backup(&dir, "r1", Some("correct horse"), || Ok(Some(chosen.clone())))
-            .unwrap()
-            .unwrap();
+        let ExportOutcome::Exported(done) =
+            export_backup(&dir, "r1", Some("correct horse"), || Ok(Some(chosen.clone())), ignore, keep_going)
+                .unwrap()
+        else {
+            panic!("the export did not finish");
+        };
 
         assert_eq!(done.items, 1);
         assert_eq!(done.media_files, 1);
@@ -306,9 +362,14 @@ mod tests {
         let dir = test_dir("export-wrong");
         write_backup(&dir, "correct horse");
 
-        let result = export_backup(&dir, "r1", Some("wrong horse"), || -> Result<_, CommandError> {
-            panic!("asked for a folder with a wrong passphrase")
-        });
+        let result = export_backup(
+            &dir,
+            "r1",
+            Some("wrong horse"),
+            || -> Result<_, CommandError> { panic!("asked for a folder with a wrong passphrase") },
+            ignore,
+            keep_going,
+        );
 
         assert!(result.is_err());
         fs::remove_dir_all(dir).ok();
@@ -320,10 +381,62 @@ mod tests {
         write_backup(&dir, "correct horse");
         let before = fs::read_dir(&dir).unwrap().count();
 
-        let done = export_backup(&dir, "r1", Some("correct horse"), || Ok(None)).unwrap();
+        let done = export_backup(&dir, "r1", Some("correct horse"), || Ok(None), ignore, keep_going).unwrap();
 
-        assert!(done.is_none());
+        assert!(matches!(done, ExportOutcome::NoFolder));
         assert_eq!(fs::read_dir(&dir).unwrap().count(), before);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn export_tells_how_far_it_is_through_the_backup() {
+        let dir = test_dir("export-progress");
+        let chosen = dir.join("chosen");
+        fs::create_dir(&chosen).unwrap();
+        write_backup(&dir, "correct horse");
+        let size = fs::metadata(backup_path(&dir, "r1")).unwrap().len();
+        let mut told = Vec::new();
+
+        export_backup(
+            &dir,
+            "r1",
+            Some("correct horse"),
+            || Ok(Some(chosen.clone())),
+            |progress| told.push(progress),
+            keep_going,
+        )
+        .unwrap();
+
+        let at = |done_bytes| ExportProgress { done_bytes, total_bytes: size };
+        assert_eq!(told.first(), Some(&at(0)));
+        assert_eq!(told.last(), Some(&at(size)));
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn an_export_stopped_once_it_has_begun_leaves_nothing_in_the_chosen_folder() {
+        let dir = test_dir("export-stop");
+        let chosen = dir.join("chosen");
+        fs::create_dir(&chosen).unwrap();
+        write_backup(&dir, "correct horse");
+
+        let picked = std::cell::Cell::new(false);
+
+        let done = export_backup(
+            &dir,
+            "r1",
+            Some("correct horse"),
+            || {
+                picked.set(true);
+                Ok(Some(chosen.clone()))
+            },
+            ignore,
+            || picked.get(),
+        )
+        .unwrap();
+
+        assert!(matches!(done, ExportOutcome::Stopped));
+        assert_eq!(fs::read_dir(&chosen).unwrap().count(), 0);
         fs::remove_dir_all(dir).ok();
     }
 

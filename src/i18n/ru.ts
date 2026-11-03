@@ -205,6 +205,10 @@ export const ru = {
 
   "backup.export": "Выгрузить копию",
   "backup.exporting": "Выгружаю…",
+  "backup.exportProgress": "Выгружено {{done}} из {{total}}",
+  "backup.exportProgressLabel": "Ход выгрузки",
+  "backup.stopExport": "Остановить выгрузку",
+  "backup.exportStopped": "Выгрузка остановлена, на диске от неё ничего не осталось.",
   "backup.exported": "Сохранено в {{folder}}. Записей: {{items, number}}, файлов: {{files, number}}. Эта папка не зашифрована.",
   "backup.exportCutOff": "Копия обрывается, поэтому здесь всё, что в ней было до этого места.",
   "backup.exportPartialFile": "{{file}} оборван и сохранён как есть.",
