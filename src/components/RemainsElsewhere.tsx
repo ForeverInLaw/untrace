@@ -4,7 +4,6 @@ import { Disclosure } from "./ui";
 /// What other people and services can still hold once the platform has deleted an item.
 const REMAINS = ["remains.otherApps", "remains.shares", "remains.saved", "remains.archives"] as const;
 
-/// What deletion cannot reach, folded away under one line.
 export function RemainsElsewhere() {
   const { t } = useTranslation();
   return (

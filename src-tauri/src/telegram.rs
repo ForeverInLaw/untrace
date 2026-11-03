@@ -83,11 +83,11 @@ impl OwnMessageCount {
         )),
         allow(dead_code)
     )]
-    pub fn from_first_page(found: usize, total_count: i32, limit: usize) -> Self {
+    pub fn from_first_page(found: usize, total_count: i32, limit: i32) -> Self {
         let reported = usize::try_from(total_count).unwrap_or(0);
         Self {
             count: reported.max(found),
-            exact: found < limit && found >= reported,
+            exact: found < usize::try_from(limit).unwrap_or(0) && found >= reported,
         }
     }
 }
