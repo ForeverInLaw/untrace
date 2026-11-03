@@ -33,7 +33,7 @@ jobs:
         env:
           BRANCH: ${{ github.head_ref }}
         run: |
-          if [ -n "$BRANCH" ] && git ls-remote --exit-code --heads https://github.com/ForeverInLaw/lethe "$BRANCH" >/dev/null; then
+          if [ -n "$BRANCH" ] && git ls-remote --exit-code --heads https://github.com/ForeverInLaw/lethe "refs/heads/$BRANCH" >/dev/null; then
             echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@v4
