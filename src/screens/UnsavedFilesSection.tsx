@@ -5,7 +5,7 @@ import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
 import { useRetryUnsavedFilesMutation, useUnsavedFilesQuery } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
-import { useRunStore } from "../stores/runStore";
+import { selectRunLive, useRunStore } from "../stores/runStore";
 import { NewBackupPassphraseField, useBackupPassphrase } from "./BackupExport";
 
 interface UnsavedFilesSectionProps {
@@ -21,14 +21,12 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
   const format = useDateFormat();
   const flowPassphrase = useFlowStore((s) => s.passphrase);
   const retryStarted = useFlowStore((s) => s.retryStarted);
-  const apply = useRunStore((s) => s.apply);
-  const resetRun = useRunStore((s) => s.reset);
-  const running = useRunStore((s) => s.status === "deleting");
+  const running = useRunStore(selectRunLive);
   const { passphrase, setPassphrase, backupPassphrase } = useBackupPassphrase(flowPassphrase);
   const [allowLostFiles, setAllowLostFiles] = useState(false);
   const unsavedQuery = useUnsavedFilesQuery(runId);
   const unsaved = unsavedQuery.data;
-  const retry = useRetryUnsavedFilesMutation(platformId, apply, resetRun);
+  const retry = useRetryUnsavedFilesMutation(platformId);
 
   if (unsavedQuery.isError) {
     return <Notice tone="fault">{errorMessage(unsavedQuery.error)}</Notice>;

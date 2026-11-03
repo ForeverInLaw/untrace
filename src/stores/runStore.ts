@@ -25,7 +25,10 @@ interface RunState {
   paused: boolean;
   status: RunStatus;
   failure: CommandError | null;
+  /// The run these numbers describe, once the engine has started it; null for a preview.
+  runId: string | null;
   apply: (e: RunEvent) => void;
+  setRunId: (runId: string | null) => void;
   setPaused: (paused: boolean) => void;
   reset: () => void;
 }
@@ -44,6 +47,7 @@ const initial = {
   paused: false,
   status: "idle" as RunStatus,
   failure: null,
+  runId: null as string | null,
 };
 
 /// Live, ephemeral run telemetry. Components MUST read via selectors.
@@ -73,5 +77,9 @@ export const useRunStore = create<RunState>((set) => ({
       }
     }),
   setPaused: (paused) => set({ paused }),
+  setRunId: (runId) => set({ runId }),
   reset: () => set(initial),
 }));
+
+/// Whether a run has started and not yet ended. The engine runs one at a time.
+export const selectRunLive = (s: RunState) => s.runId !== null && s.status !== "done" && s.status !== "error";

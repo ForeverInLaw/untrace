@@ -37,9 +37,8 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   const format = useDateFormat();
   const queryClient = useQueryClient();
   const flowPassphrase = useFlowStore((s) => s.passphrase);
-  const runFailure = useRunStore((s) => s.failure);
-  // The run store holds the latest run only; another receipt has no failure of its own here.
-  const isLatestRun = useFlowStore((s) => s.runId) === runId;
+  // The run store holds the latest run only; another receipt has no failure of its own there.
+  const runFailure = useRunStore((s) => (s.runId === runId ? s.failure : null));
   const { passphrase, setPassphrase, backupPassphrase } = useBackupPassphrase(flowPassphrase);
   const receiptQuery = useReceiptQuery(runId);
   const receipt = receiptQuery.data;
@@ -80,7 +79,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   );
 
   if (!receipt) {
-    const failure = errorMessage(receiptQuery.error ?? (isLatestRun ? runFailure : null));
+    const failure = errorMessage(receiptQuery.error ?? runFailure);
     return (
       <Screen actions={actions} heading={t(receiptQuery.isError ? "receipt.loadFailed" : "receipt.waiting")}>
         {failure && <Notice tone="fault">{failure}</Notice>}

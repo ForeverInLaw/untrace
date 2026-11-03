@@ -23,6 +23,7 @@ import {
   type ExportOutcome,
 } from "../lib/tauri";
 import { useExportStore } from "../stores/exportStore";
+import { selectRunLive, useRunStore } from "../stores/runStore";
 import { OWN_COUNTS_KEY, useSessionRefresh } from "./telegram";
 
 const PREVIEW_PAGE_SIZE = 100;
@@ -155,11 +156,14 @@ export function useDryRunMutation() {
   });
 }
 
-/// Starts the previewed run on whichever engine the platform uses.
-export function useStartRunMutation(platformId: string, onEvent: (event: RunEvent) => void) {
+/// Starts the previewed run on whichever engine the platform uses; its events go to
+/// the run store, which holds the run from here on.
+export function useStartRunMutation(platformId: string) {
   const queryClient = useQueryClient();
+  const apply = useRunStore((s) => s.apply);
+  const setRunId = useRunStore((s) => s.setRunId);
   const handleEvent = (event: RunEvent) => {
-    onEvent(event);
+    apply(event);
     if (event.event === "error") {
       void queryClient.invalidateQueries({ queryKey: ["interrupted-runs"] });
     }
@@ -168,6 +172,8 @@ export function useStartRunMutation(platformId: string, onEvent: (event: RunEven
     mutationKey: ["runs", "start"],
     mutationFn: (req: StartRunRequest) =>
       platformId === "telegram" ? api.telegramStartRun(req, handleEvent) : api.startRun(req, handleEvent),
+    // Only once the engine took it: a start it refused must not unseat the run it kept.
+    onSuccess: (_started, req) => setRunId(req.runId),
     // Even a stopped run may have deleted some messages.
     onSettled: () =>
       platformId === "telegram" ? queryClient.invalidateQueries({ queryKey: OWN_COUNTS_KEY }) : undefined,
@@ -186,18 +192,17 @@ interface RetryUnsavedFiles {
 
 /// Starts a follow-up run for what stayed, and resolves to its id. Whatever is in it
 /// that the backup cannot hold in full, the person already agreed to in the first run.
-/// `onOpened` runs once the engine has accepted it, just before it starts.
-export function useRetryUnsavedFilesMutation(
-  platformId: string,
-  onEvent: (event: RunEvent) => void,
-  onOpened: () => void,
-) {
-  const start = useStartRunMutation(platformId, onEvent);
+export function useRetryUnsavedFilesMutation(platformId: string) {
+  const start = useStartRunMutation(platformId);
+  const resetRun = useRunStore((s) => s.reset);
   return useMutation({
     mutationKey: ["runs", "retry-unsaved"],
     mutationFn: async ({ runId, backupPassphrase, allowLostFiles }: RetryUnsavedFiles) => {
       const { run_id: retryId } = await api.retryUnsavedFiles(runId);
-      onOpened();
+      // What the store showed is over, unless a run started meanwhile; then this start is refused.
+      if (!selectRunLive(useRunStore.getState())) {
+        resetRun();
+      }
       try {
         await start.mutateAsync({
           runId: retryId,
