@@ -23,10 +23,11 @@ interface BackupPassphraseFieldProps {
   onChange: (value: string) => void;
 }
 
-/// The password for `runId`'s backup, shown only when that backup was written with one.
+/// The password for `runId`'s backup, hidden only once the backup is known to need none:
+/// until then, or if asking fails, a backup with a password must still be openable.
 export function BackupPassphraseField({ runId, value, onChange }: BackupPassphraseFieldProps & { runId: string }) {
   const { t } = useTranslation();
-  if (!useBackupNeedsPassphraseQuery(runId).data) {
+  if (useBackupNeedsPassphraseQuery(runId).data === false) {
     return null;
   }
   return (
