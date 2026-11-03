@@ -15,7 +15,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::future::Future;
 use std::io;
+use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -52,6 +54,8 @@ pub struct AppState {
     /// Separate connection for UI reads: a run holds `store` until it finishes.
     pub reader: Arc<Mutex<Store>>,
     pub controls: Arc<Mutex<HashMap<String, RunControl>>>,
+    /// Exports under way, by run, with the flag that stops each.
+    pub exports: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     pub pending: Arc<Mutex<HashMap<String, PendingRun>>>,
     pub pds_host: String,
     pub backup_dir: PathBuf,
@@ -503,19 +507,24 @@ async fn verify_backup(
 }
 
 /// Off the async runtime, because decrypting a large backup takes a while and the
-/// folder dialog blocks until the person answers.
+/// folder dialog blocks until the person answers. Progress goes over `on_progress`
+/// until the export ends; `stop_export` stops it.
 #[tauri::command]
 async fn export_backup(
     window: tauri::Window,
     state: State<'_, AppState>,
     run_id: String,
     backup_passphrase: Option<String>,
-) -> Result<Option<backup::BackupExport>, CommandError> {
+    on_progress: Channel<backup::ExportProgress>,
+) -> Result<backup::ExportOutcome, CommandError> {
+    let stop = Arc::new(AtomicBool::new(false));
+    claim_export_slot(&mut *state.exports.lock().await, &run_id, stop.clone())?;
     let backup_dir = state.backup_dir.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    let exporting = run_id.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
         backup::export_backup(
             &backup_dir,
-            &run_id,
+            &exporting,
             backup_passphrase.as_deref(),
             || {
                 let folder = window
@@ -525,9 +534,40 @@ async fn export_backup(
                     .blocking_pick_folder();
                 Ok(folder.map(|folder| folder.into_path()).transpose()?)
             },
+            |progress| {
+                let _ = on_progress.send(progress);
+                if stop.load(Ordering::SeqCst) {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                }
+            },
         )
     })
-    .await?
+    .await;
+    state.exports.lock().await.remove(&run_id);
+    outcome?
+}
+
+/// One export of a backup at a time: a second one would write a second folder.
+fn claim_export_slot(
+    exports: &mut HashMap<String, Arc<AtomicBool>>,
+    run_id: &str,
+    stop: Arc<AtomicBool>,
+) -> Result<(), CommandError> {
+    if exports.contains_key(run_id) {
+        return Err(CommandError::msg("this backup is already being exported"));
+    }
+    exports.insert(run_id.to_owned(), stop);
+    Ok(())
+}
+
+#[tauri::command]
+async fn stop_export(state: State<'_, AppState>, run_id: String) -> Result<(), CommandError> {
+    if let Some(stop) = state.exports.lock().await.get(&run_id) {
+        stop.store(true, Ordering::SeqCst);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -609,6 +649,7 @@ pub fn run() {
                 store: Arc::new(Mutex::new(store)),
                 reader: Arc::new(Mutex::new(reader)),
                 controls: Arc::new(Mutex::new(HashMap::new())),
+                exports: Arc::new(Mutex::new(HashMap::new())),
                 pending: Arc::new(Mutex::new(HashMap::new())),
                 pds_host,
                 backup_dir,
@@ -634,6 +675,7 @@ pub fn run() {
             discard_retry,
             verify_backup,
             export_backup,
+            stop_export,
             pause_run,
             resume_run,
             stop_run,

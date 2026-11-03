@@ -17,6 +17,7 @@ import {
   type StartRunRequest,
   type BackupRequest,
 } from "../lib/tauri";
+import { useExportStore } from "../stores/exportStore";
 import { OWN_COUNTS_KEY, useSessionRefresh } from "./telegram";
 
 const PREVIEW_PAGE_SIZE = 100;
@@ -194,10 +195,27 @@ export function useVerifyBackupMutation() {
   });
 }
 
+/// The export's progress lives in the export store until it ends.
 export function useExportBackupMutation() {
+  const report = useExportStore((s) => s.report);
+  const end = useExportStore((s) => s.end);
   return useMutation({
     mutationKey: ["backups", "export"],
-    mutationFn: (req: BackupRequest) => api.exportBackup(req),
+    mutationFn: async (req: BackupRequest) => {
+      report(req.runId, { done_bytes: 0, total_bytes: 0 });
+      try {
+        return await api.exportBackup(req, (progress) => report(req.runId, progress));
+      } finally {
+        end(req.runId);
+      }
+    },
+  });
+}
+
+export function useStopExportMutation() {
+  return useMutation({
+    mutationKey: ["backups", "stop-export"],
+    mutationFn: (runId: string) => api.stopExport(runId),
   });
 }
 

@@ -42,7 +42,7 @@ export function InterruptedRunDetail({ run, exit }: InterruptedRunDetailProps) {
         <div><dt>{t("receipt.deleted")}</dt><dd>{t("cleanup.plainNumber", { value: run.deleted })}</dd></div>
       </dl>
       {exportBackup.isError && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
-      <BackupExportResult mutation={exportBackup} />
+      <BackupExportResult mutation={exportBackup} runId={run.run_id} />
       <UnsavedFilesSection account={run.account_label} platformId={run.platform} runId={run.run_id} />
     </Screen>
   );

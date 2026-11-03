@@ -140,7 +140,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
           </dl>
           {(verifyFailed || exportBackup.isError) && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
           {verify.isError && <Notice tone="fault">{errorMessage(verify.error)}</Notice>}
-          <BackupExportResult mutation={exportBackup} />
+          <BackupExportResult mutation={exportBackup} runId={runId} />
         </div>
         <figure className="receipt__seal">
           <Seal runId={runId} size={SEAL_SIZE} />
