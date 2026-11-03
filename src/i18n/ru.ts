@@ -308,7 +308,6 @@ export const ru = {
   "unsaved.why": "Причина",
   "unsaved.failure.unavailable": "Платформа не отдаёт файл",
   "unsaved.failure.unreachable": "Сейчас не удалось скачать",
-  "unsaved.more": "И ещё {{count, number}}",
   "unsaved.allowLost": "Если платформа снова не отдаст файл, удалить запись без него. В копии останется только её часть. При других сбоях скачивания запись останется.",
   "unsaved.retry": "Повторить",
   "unsaved.retryAndDelete": "Повторить и удалить",

@@ -278,7 +278,6 @@ export const en = {
   "unsaved.why": "Why",
   "unsaved.failure.unavailable": "The platform won't hand over the file",
   "unsaved.failure.unreachable": "Couldn't download it right now",
-  "unsaved.more": "And {{count, number}} more",
   "unsaved.allowLost": "If the platform still won't hand over a file, delete the item without it. The backup will hold only part of that item. Any other download problem keeps the item.",
   "unsaved.retry": "Try again",
   "unsaved.retryAndDelete": "Try again and delete",

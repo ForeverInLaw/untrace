@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Search, ShieldCheck } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
+import { MoreRows } from "../components/MoreRows";
 import { Button, Checkbox, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
@@ -136,13 +137,7 @@ function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
         </p>
       )}
       {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
-      {items.hasNextPage && (
-        <div className="table-more">
-          <Button disabled={items.isFetchingNextPage} onClick={() => items.fetchNextPage()}>
-            {t("preview.more")}
-          </Button>
-        </div>
-      )}
+      <MoreRows rows={items} />
     </div>
   );
 }
