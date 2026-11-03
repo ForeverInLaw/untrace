@@ -497,7 +497,8 @@ mod tests {
         let dir = test_dir("backup-again");
         write_backup(&dir, "correct horse");
 
-        assert!(backup_target(&dir, "r1", Some("other horse")).is_err());
+        let refused = backup_target(&dir, "r1", Some("other horse")).err().unwrap();
+        assert_eq!(refused.message, "this run already has a backup");
         assert!(verify_backup(&dir, "r1", Some("correct horse")).unwrap().complete);
 
         fs::remove_dir_all(dir).ok();
