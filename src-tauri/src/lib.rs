@@ -46,6 +46,8 @@ const STORE_FILE: &str = "untrace.db";
 const BACKUP_DIR: &str = "backups";
 const SESSION_DIR: &str = "sessions";
 const TELEGRAM_DIR: &str = "telegram";
+/// Where a Bluesky file waits, unencrypted, until the backup has it.
+const DOWNLOADS_DIR: &str = "downloads";
 const ANOTHER_RUN_IS_LIVE: &str = "another cleanup is still running";
 
 pub struct AppState {
@@ -60,6 +62,7 @@ pub struct AppState {
     pub pds_host: String,
     pub backup_dir: PathBuf,
     pub session_dir: PathBuf,
+    pub downloads_dir: PathBuf,
 }
 
 #[derive(Clone)]
@@ -168,9 +171,7 @@ where
 /// pipeline. Concrete until after `authenticate` (an inherent method), then
 /// coerced to the trait object the pipeline consumes.
 async fn authed_adapter(
-    egress: Arc<lethe_net::Egress>,
-    pds_host: &str,
-    session_dir: &std::path::Path,
+    state: &AppState,
     platform: &str,
     account_label: &str,
 ) -> Result<Arc<dyn PlatformAdapter>, CommandError> {
@@ -179,12 +180,13 @@ async fn authed_adapter(
             "unsupported platform: {platform}"
         )));
     }
-    let blob = session::load(session_dir, platform, account_label)?;
+    let blob = session::load(&state.session_dir, platform, account_label)?;
     let cred = Credential {
         account_label: account_label.to_owned(),
         secret: SecretBlob(blob),
     };
-    let mut adapter = BlueskyAdapter::new(egress, pds_host);
+    let mut adapter = BlueskyAdapter::new(state.egress.clone(), &state.pds_host)
+        .download_to(state.downloads_dir.clone());
     adapter.authenticate(&cred).await?;
     Ok(Arc::new(adapter))
 }
@@ -244,14 +246,7 @@ async fn dry_run(
     let filter = run_filters::to_filter_spec(&req.filter)?;
     let filter_json = serde_json::to_string(&req.filter)?;
     let plan = run_filters::plan_from_filter(&filter);
-    let adapter = authed_adapter(
-        state.egress.clone(),
-        &state.pds_host,
-        &state.session_dir,
-        &req.platform,
-        &req.account_label,
-    )
-    .await?;
+    let adapter = authed_adapter(&state, &req.platform, &req.account_label).await?;
     let run_id = format!("{}-{}", req.platform, now_secs());
 
     let run_req = RunRequest {
@@ -324,14 +319,7 @@ async fn start_run(
 
     // Authenticate up front so any failure surfaces synchronously to the caller —
     // never start deleting a run we cannot back up or receipt.
-    let adapter = authed_adapter(
-        state.egress.clone(),
-        &state.pds_host,
-        &state.session_dir,
-        &pending.platform,
-        &pending.account_label,
-    )
-    .await?;
+    let adapter = authed_adapter(&state, &pending.platform, &pending.account_label).await?;
 
     execute_previewed_run(
         &state,
@@ -625,9 +613,19 @@ pub fn run() {
             let backup_dir = app_data_dir.join(BACKUP_DIR);
             let session_dir = app_data_dir.join(SESSION_DIR);
             let telegram_dir = app_data_dir.join(TELEGRAM_DIR);
+            let downloads_dir = app_data_dir.join(DOWNLOADS_DIR);
             fs::create_dir_all(&backup_dir)?;
             fs::create_dir_all(&session_dir)?;
             fs::create_dir_all(&telegram_dir)?;
+            // Before TDLib starts, so its files folder is not in use. A file held open
+            // elsewhere, by an antivirus for one, must not keep the app from starting:
+            // the next start tries again.
+            if let Err(error) = backup::empty_download_dirs(&[
+                downloads_dir.clone(),
+                telegram_dir.join(telegram::FILES_DIR),
+            ]) {
+                eprintln!("could not remove files left from an interrupted backup: {error}");
+            }
             let store = open_app_store(app)?;
             // No run is previewed or under way yet, so what none can use goes now.
             store.forget_stale_runs()?;
@@ -643,6 +641,7 @@ pub fn run() {
                 pds_host,
                 backup_dir,
                 session_dir,
+                downloads_dir,
             });
             app.manage(telegram::TelegramState::new(telegram_dir));
             Ok(())

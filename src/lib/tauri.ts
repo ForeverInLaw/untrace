@@ -150,6 +150,8 @@ export interface BackupVerification {
   ok: boolean;
   items: number;
   media_files: number;
+  /** False when the backup breaks off; what it holds up to there is intact. */
+  complete: boolean;
 }
 
 export interface BackupExport {
