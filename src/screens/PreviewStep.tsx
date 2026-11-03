@@ -103,10 +103,12 @@ interface ItemsTableProps {
   filter: Filter;
   /// Trimmed text the rows must contain; blank lists them all.
   search: string;
+  /// The search field already holds text the rows do not reflect yet.
+  typing: boolean;
   undeletable: number;
 }
 
-function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
+function ItemsTable({ runId, filter, search, typing, undeletable }: ItemsTableProps) {
   const { t } = useTranslation();
   const listed = usePreviewFilter(filter.group, filter.type, search);
   const items = usePreviewItemsQuery(runId, listed);
@@ -128,7 +130,7 @@ function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
                   aria-label={t("preview.toggleAll")}
                   checked={going > 0 && kept === 0}
                   // Counts of the last search, or from before a save, would choose for the wrong rows.
-                  disabled={going + kept === 0 || saving || choice.isPlaceholderData}
+                  disabled={going + kept === 0 || saving || typing || choice.isPlaceholderData}
                   indeterminate={going > 0 && kept > 0}
                   onChange={() => chooseAll.mutate({ filter: listed, isProtected: going > 0 })}
                 />
@@ -163,6 +165,7 @@ function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
         </p>
       )}
       {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
+      {choice.isError && <Notice tone="fault">{errorMessage(choice.error)}</Notice>}
       {chooseAll.isError && <Notice tone="fault">{errorMessage(chooseAll.error)}</Notice>}
       <MoreRows query={items} />
     </div>
@@ -290,7 +293,13 @@ export function PreviewStep() {
           </Chip>
         )}
       </fieldset>
-      <ItemsTable filter={filter} runId={runId} search={searched} undeletable={undeletable} />
+      <ItemsTable
+        filter={filter}
+        runId={runId}
+        search={searched}
+        typing={search.trim() !== searched}
+        undeletable={undeletable}
+      />
     </Screen>
   );
 }
