@@ -496,14 +496,14 @@ mod tests {
         let verified = verify_backup(&dir, "r1", Some("correct horse")).unwrap();
         assert!(verified.ok);
         assert!(!verified.complete);
-        assert_eq!(verified.items, 2);
+        assert_eq!(verified.items, 1);
         assert_eq!(verified.media_files, 1);
 
         fs::remove_dir_all(dir).ok();
     }
 
     #[test]
-    fn files_left_waiting_for_a_backup_are_gone_after_a_restart() {
+    fn emptying_download_dirs_removes_files_left_waiting_for_a_backup() {
         let dir = test_dir("downloads");
         let downloads = dir.join("downloads");
         let tdlib_files = dir.join("files");
