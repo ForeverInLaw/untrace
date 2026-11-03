@@ -166,14 +166,13 @@ where
     rx
 }
 
-/// Load the stored credential and return an authenticated adapter ready for the
-/// pipeline. Concrete until after `authenticate` (an inherent method), then
-/// coerced to the trait object the pipeline consumes.
+/// Load the stored credential and return an authenticated adapter, which the caller
+/// coerces to the trait object the pipeline consumes.
 async fn authed_adapter(
     state: &AppState,
     platform: &str,
     account_label: &str,
-) -> Result<Arc<dyn PlatformAdapter>, CommandError> {
+) -> Result<BlueskyAdapter, CommandError> {
     if platform != "bluesky" {
         return Err(CommandError::msg(format!(
             "unsupported platform: {platform}"
@@ -187,7 +186,7 @@ async fn authed_adapter(
     let mut adapter = BlueskyAdapter::new(state.egress.clone(), &state.pds_host)
         .download_to(state.downloads_dir.clone());
     adapter.authenticate(&cred).await?;
-    Ok(Arc::new(adapter))
+    Ok(adapter)
 }
 
 fn open_app_store<R: tauri::Runtime>(
@@ -245,7 +244,8 @@ async fn dry_run(
     let filter = run_filters::to_filter_spec(&req.filter)?;
     let filter_json = serde_json::to_string(&req.filter)?;
     let plan = run_filters::plan_from_filter(&filter);
-    let adapter = authed_adapter(&state, &req.platform, &req.account_label).await?;
+    let adapter: Arc<dyn PlatformAdapter> =
+        Arc::new(authed_adapter(&state, &req.platform, &req.account_label).await?);
     let run_id = new_run_id(&req.platform);
 
     let run_req = RunRequest {
@@ -321,7 +321,12 @@ async fn start_run(
 
     execute_previewed_run(
         &state,
-        |_| adapter,
+        |control| {
+            Arc::new(adapter.stopped_by(move || {
+                let control = control.clone();
+                async move { control.stopped().await }
+            }))
+        },
         run_id,
         pending,
         backup_passphrase,
