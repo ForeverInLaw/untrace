@@ -123,6 +123,7 @@ export const en = {
   "preview.subtypeWithText": "{{subtype}}: {{text}}",
   "preview.typeWithSize": "{{type}} · {{size}}",
   "preview.toggleRow": "Delete this item",
+  "preview.toggleAll": "Delete everything listed",
   "table.more": "Show more",
   "preview.empty": "Nothing matched the conditions, so there is nothing to delete.",
   "preview.emptyUndeletable": "Everything that matched is out of your reach: the platform won't let this account delete it.",

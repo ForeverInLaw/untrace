@@ -5,8 +5,8 @@ use std::collections::HashSet;
 
 use lethe_adapter::ContentType;
 use lethe_crypto::receipt::RunSummary;
-use lethe_store::{ItemGroup, ItemQuery, ScopeCount, ScopeOutcome, StoredReceipt, UnsavedCursor, UnsavedFiles};
-use serde::Serialize;
+use lethe_store::{ChoiceCounts, ItemFilter, ItemGroup, ItemQuery, ScopeCount, ScopeOutcome, StoredReceipt, UnsavedCursor, UnsavedFiles};
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::backup::{self, BackupSpace};
@@ -138,30 +138,41 @@ pub async fn run_scope_results(
     Ok(state.scope_results.lock().await.get(&run_id).cloned().unwrap_or_default())
 }
 
+/// The preview rows a list or a bulk choice covers, as the interface sends them.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewFilter {
+    group: ItemGroup,
+    content_type: Option<ContentType>,
+    /// Text the rows must contain; blank covers them all.
+    search: String,
+    /// Subtypes whose wording, in the interface language, holds the search.
+    matching_subtypes: Vec<String>,
+}
+
+impl PreviewFilter {
+    /// Runs `use_filter` with the store's form of this filter.
+    fn apply<T>(&self, use_filter: impl FnOnce(&ItemFilter) -> T) -> T {
+        let matching_subtypes: Vec<&str> = self.matching_subtypes.iter().map(String::as_str).collect();
+        use_filter(&ItemFilter {
+            group: self.group,
+            content_type: self.content_type,
+            search: &self.search,
+            matching_subtypes: &matching_subtypes,
+        })
+    }
+}
+
 #[tauri::command]
 pub async fn preview_items(
     state: State<'_, AppState>,
     run_id: String,
-    group: ItemGroup,
-    content_type: Option<ContentType>,
-    search: String,
-    matching_subtypes: Vec<String>,
+    filter: PreviewFilter,
     offset: u32,
     limit: u32,
 ) -> Result<Vec<PreviewItem>, CommandError> {
-    let matching_subtypes: Vec<&str> = matching_subtypes.iter().map(String::as_str).collect();
     let store = state.reader.lock().await;
-    let rows = store.preview_items(
-        &run_id,
-        &ItemQuery {
-            group,
-            content_type,
-            search: &search,
-            matching_subtypes: &matching_subtypes,
-            offset,
-            limit,
-        },
-    )?;
+    let rows = filter.apply(|&filter| store.preview_items(&run_id, &ItemQuery { filter, offset, limit }))?;
     Ok(rows
         .into_iter()
         .map(|row| PreviewItem {
@@ -190,6 +201,29 @@ pub async fn set_item_protected(
         .lock()
         .await
         .set_item_protected(&run_id, &platform_id, protected)?)
+}
+
+/// Keeps, or lets go again, every row the filter covers. Returns how many changed.
+#[tauri::command]
+pub async fn set_items_protected(
+    state: State<'_, AppState>,
+    run_id: String,
+    filter: PreviewFilter,
+    protected: bool,
+) -> Result<u64, CommandError> {
+    let store = state.reader.lock().await;
+    Ok(filter.apply(|filter| store.set_items_protected(&run_id, filter, protected))?)
+}
+
+/// How the rows the filter covers stand, for the checkbox over all of them.
+#[tauri::command]
+pub async fn preview_choice(
+    state: State<'_, AppState>,
+    run_id: String,
+    filter: PreviewFilter,
+) -> Result<ChoiceCounts, CommandError> {
+    let store = state.reader.lock().await;
+    Ok(filter.apply(|filter| store.choice_counts(&run_id, filter))?)
 }
 
 #[tauri::command]

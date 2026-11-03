@@ -9,7 +9,7 @@ use lethe_adapter::{
     MediaRef, Outcome, PlatformAdapter, PushdownDim, RatePolicy, RiskClass,
 };
 use lethe_core::pipeline::{self, RunRequest};
-use lethe_core::ProgressEvent;
+use lethe_core::{ProgressEvent, RunControl};
 use lethe_store::NewRun;
 use lethe_telegram::tdlib_bridge::{
     delete_downloaded_file, delete_message_batch, download_message_file, read_delete_rights,
@@ -22,7 +22,7 @@ use tokio::sync::watch;
 use super::{own_message_page, parse_chat_id, TelegramState};
 use crate::telegram::TelegramDryRunRequest;
 use crate::{
-    now_secs, run_filters, run_offthread, AppState, CommandError, DryRunResult, PendingRun,
+    new_run_id, now_secs, run_filters, run_offthread, AppState, CommandError, DryRunResult, PendingRun,
 };
 
 /// TDLib's upper bound for one search page.
@@ -45,6 +45,15 @@ async fn connection_lost(mut connection: watch::Receiver<bool>) {
     }
 }
 
+/// Completes once a download must be called off, with the reason: the run was
+/// stopped, or TDLib has been without a connection for `CONNECTION_GRACE`.
+async fn download_called_off(connection: watch::Receiver<bool>, run: RunControl) -> &'static str {
+    tokio::select! {
+        () = run.stopped() => "the run was stopped",
+        () = connection_lost(connection) => "the connection to Telegram was lost",
+    }
+}
+
 pub async fn telegram_dry_run_chats(
     app: State<'_, AppState>,
     state: State<'_, TelegramState>,
@@ -59,7 +68,7 @@ pub async fn telegram_dry_run_chats(
     let filter = run_filters::to_filter_spec(&req.filter)?;
     let filter_json = serde_json::to_string(&req.filter)?;
     let adapter = snapshot_items_for_chats(client, current_user_id, &chat_ids, state.connection()).await?;
-    let run_id = format!("telegram-{}", now_secs());
+    let run_id = new_run_id("telegram");
 
     let run_req = RunRequest {
         run_id: run_id.clone(),
@@ -114,6 +123,8 @@ pub struct TelegramSnapshotAdapter {
     current_user_id: i64,
     /// Whether TDLib is connected to Telegram.
     connection: watch::Receiver<bool>,
+    /// The run this adapter downloads for; a stop calls off the download in progress.
+    run: RunControl,
 }
 
 impl TelegramSnapshotAdapter {
@@ -124,8 +135,12 @@ impl TelegramSnapshotAdapter {
         client: TdlibClientId,
         current_user_id: i64,
         connection: watch::Receiver<bool>,
+        run: RunControl,
     ) -> Self {
-        Self::new(Vec::new(), client, current_user_id, connection)
+        Self {
+            run,
+            ..Self::new(Vec::new(), client, current_user_id, connection)
+        }
     }
 
     pub fn new(
@@ -138,6 +153,7 @@ impl TelegramSnapshotAdapter {
             client,
             current_user_id,
             connection,
+            run: RunControl::new(),
             descriptor: Descriptor {
                 id: "telegram",
                 display_name: "Telegram",
@@ -197,8 +213,8 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
     ) -> Result<FetchedMedia, AdapterError> {
         let (chat_id, message_id) = parse_message_ref(item)
             .ok_or_else(|| AdapterError::Platform("unparseable Telegram message ref".into()))?;
-        let lost = connection_lost(self.connection.clone());
-        download_message_file(self.client, chat_id, message_id, &media.url, lost).await
+        let called_off = download_called_off(self.connection.clone(), self.run.clone());
+        download_message_file(self.client, chat_id, message_id, &media.url, called_off).await
     }
 
     async fn is_reachable(&self) -> bool {
@@ -267,4 +283,29 @@ pub async fn snapshot_items_for_chats(
         }
     }
     Ok(Arc::new(TelegramSnapshotAdapter::new(items, client, current_user_id, connection)))
+}
+
+#[cfg(test)]
+mod tests {
+    use lethe_core::RunControl;
+    use tokio::sync::watch;
+    use tokio::time::{sleep, timeout, Duration};
+
+    use super::{download_called_off, CONNECTION_GRACE};
+
+    #[tokio::test(start_paused = true)]
+    async fn a_download_is_called_off_by_a_stop_or_a_lasting_disconnect() {
+        let (online, connection) = watch::channel(true);
+        let run = RunControl::new();
+        let stopped = tokio::spawn(download_called_off(connection.clone(), run.clone()));
+        sleep(Duration::from_secs(60)).await;
+        assert!(!stopped.is_finished());
+        run.stop();
+        assert_eq!(timeout(Duration::from_secs(1), stopped).await.unwrap().unwrap(), "the run was stopped");
+
+        let lost = tokio::spawn(download_called_off(connection, RunControl::new()));
+        online.send(false).unwrap();
+        let reason = timeout(CONNECTION_GRACE + Duration::from_secs(1), lost).await.unwrap().unwrap();
+        assert_eq!(reason, "the connection to Telegram was lost");
+    }
 }

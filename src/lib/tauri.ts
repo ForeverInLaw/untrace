@@ -292,16 +292,20 @@ export interface PreviewItem {
 /// Which preview rows a list shows. `all` leaves out what cannot be deleted.
 export type ItemGroup = "all" | "protected" | "only_for_self" | "undeletable";
 
-export interface PreviewItemsRequest {
-  runId: string;
+/// The preview rows a list or a choice over all of them covers.
+export interface PreviewFilter {
   group: ItemGroup;
   contentType: ContentType | null;
-  /// Text the rows must contain; blank lists them all.
+  /// Text the rows must contain; blank covers them all.
   search: string;
   /// Subtypes whose wording holds the search; their rows match as well.
   matchingSubtypes: ItemSubtype[];
-  offset: number;
-  limit: number;
+}
+
+/// How the rows of a filter stand: going with the run, or kept.
+export interface ChoiceCounts {
+  going: number;
+  kept: number;
 }
 
 export interface RunSummary {
@@ -410,9 +414,14 @@ export const api = {
   previewScopes: (runId: string, consent: RunConsent) =>
     invoke<ScopeCount[]>("preview_scopes", { runId, consent }),
   runScopeResults: (runId: string) => invoke<ScopeOutcome[]>("run_scope_results", { runId }),
-  previewItems: (req: PreviewItemsRequest) => invoke<PreviewItem[]>("preview_items", { ...req }),
+  previewItems: (runId: string, filter: PreviewFilter, offset: number, limit: number) =>
+    invoke<PreviewItem[]>("preview_items", { runId, filter, offset, limit }),
   setItemProtected: (runId: string, platformId: string, isProtected: boolean) =>
     invoke<boolean>("set_item_protected", { runId, platformId, protected: isProtected }),
+  setItemsProtected: (runId: string, filter: PreviewFilter, isProtected: boolean) =>
+    invoke<number>("set_items_protected", { runId, filter, protected: isProtected }),
+  previewChoice: (runId: string, filter: PreviewFilter) =>
+    invoke<ChoiceCounts>("preview_choice", { runId, filter }),
   listReceipts: () => invoke<Receipt[]>("list_receipts"),
   getReceipt: (runId: string) => invoke<Receipt | null>("get_receipt", { runId }),
   listInterruptedRuns: () => invoke<InterruptedRun[]>("list_interrupted_runs"),

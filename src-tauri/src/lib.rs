@@ -245,7 +245,7 @@ async fn dry_run(
     let filter_json = serde_json::to_string(&req.filter)?;
     let plan = run_filters::plan_from_filter(&filter);
     let adapter = authed_adapter(&state, &req.platform, &req.account_label).await?;
-    let run_id = format!("{}-{}", req.platform, now_secs());
+    let run_id = new_run_id(&req.platform);
 
     let run_req = RunRequest {
         run_id: run_id.clone(),
@@ -320,7 +320,7 @@ async fn start_run(
 
     execute_previewed_run(
         &state,
-        adapter,
+        |_| adapter,
         run_id,
         pending,
         backup_passphrase,
@@ -340,7 +340,7 @@ async fn retry_unsaved_files(
     if !state.controls.lock().await.is_empty() {
         return Err(CommandError::another_run_is_live());
     }
-    let retry_id = format!("retry-{}", now_secs());
+    let retry_id = new_run_id("retry");
     let retry = state
         .reader
         .lock()
@@ -386,11 +386,12 @@ fn claim_run_slot(
 
 /// Phase-2 machinery shared by every platform's start command: wire backup +
 /// receipt + controls and fire the run on its own thread. The authed adapter is
-/// the only platform-specific input, so a new platform's start command just
-/// builds its adapter and calls this.
+/// the only platform-specific input, so a new platform's start command just says
+/// how to build it. It is handed the run's control, to call off work in progress
+/// on a stop.
 pub(crate) async fn execute_previewed_run(
     state: &AppState,
-    adapter: Arc<dyn PlatformAdapter>,
+    adapter: impl FnOnce(RunControl) -> Arc<dyn PlatformAdapter>,
     run_id: String,
     pending: PendingRun,
     backup_passphrase: Option<String>,
@@ -400,6 +401,7 @@ pub(crate) async fn execute_previewed_run(
     // Claimed first, so a second start of a live run is refused before it writes a
     // key over the one the running backup needs. Given back if the run cannot start.
     let control = RunControl::new();
+    let adapter = adapter(control.clone());
     claim_run_slot(&mut *state.controls.lock().await, &run_id, control.clone())?;
     let prepared = async {
         // Checked before the backup target, which writes key files for the run.
@@ -587,6 +589,12 @@ async fn stop_run(state: State<'_, AppState>, run_id: String) -> Result<(), Comm
     Ok(())
 }
 
+/// An id no other run has: `kind`, the second the run opened, which keeps backups
+/// in order by name, and a random part, as two runs can open in the same second.
+fn new_run_id(kind: &str) -> String {
+    format!("{kind}-{}-{}", now_secs(), uuid::Uuid::new_v4().simple())
+}
+
 fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -690,6 +698,8 @@ pub fn run() {
             run_reads::run_scope_results,
             run_reads::preview_items,
             run_reads::set_item_protected,
+            run_reads::set_items_protected,
+            run_reads::preview_choice,
             run_reads::list_receipts,
             run_reads::get_receipt,
             run_reads::list_interrupted_runs,
@@ -705,6 +715,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runs_opened_in_the_same_second_get_ids_of_their_own() {
+        let (first, second) = (new_run_id("retry"), new_run_id("retry"));
+
+        assert_ne!(first, second);
+        assert!(first.starts_with("retry-"));
+    }
 
     #[test]
     fn a_run_reports_progress_as_the_engine_words_it_and_its_failure_with_a_code() {

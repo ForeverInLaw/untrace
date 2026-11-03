@@ -15,6 +15,7 @@ import {
   type ConnectAccountRequest,
   type ContentType,
   type ItemGroup,
+  type PreviewFilter,
   type PreviewItem,
   type RunEvent,
   type RunConsent,
@@ -94,33 +95,36 @@ export function useRunScopeResultsQuery(runId: string, enabled: boolean) {
   });
 }
 
+/// The preview rows of a chip and a search. A search finds rows by their text and
+/// by what they are, in the interface language.
+export function usePreviewFilter(group: ItemGroup, contentType: ContentType | null, search: string): PreviewFilter {
+  const matchingSubtypes = useSubtypesNamedBy(search);
+  return { group, contentType, search, matchingSubtypes };
+}
+
 /// Keeps the rows on screen while a new search loads, so typing does not blank the
 /// table. A new chip starts empty: rows of another chip would be wrong under it.
-/// A search finds rows by their text and by what they are, in the interface language.
-export function usePreviewItemsQuery(
-  runId: string,
-  group: ItemGroup,
-  contentType: ContentType | null,
-  search: string,
-) {
-  const matchingSubtypes = useSubtypesNamedBy(search);
+export function usePreviewItemsQuery(runId: string, filter: PreviewFilter) {
   return useInfiniteQuery({
-    queryKey: ["preview", runId, "items", group, contentType, search, matchingSubtypes],
+    queryKey: ["preview", runId, "items", filter] as const,
     initialPageParam: 0,
-    placeholderData: (previous: InfiniteData<PreviewItem[], number> | undefined, previousQuery) =>
-      previousQuery?.queryKey[3] === group && previousQuery.queryKey[4] === contentType ? previous : undefined,
-    queryFn: ({ pageParam }) =>
-      api.previewItems({
-        runId,
-        group,
-        contentType,
-        search,
-        matchingSubtypes,
-        offset: pageParam,
-        limit: PAGE_SIZE,
-      }),
+    placeholderData: (previous: InfiniteData<PreviewItem[], number> | undefined, previousQuery) => {
+      const shown = previousQuery?.queryKey[3];
+      return shown?.group === filter.group && shown.contentType === filter.contentType ? previous : undefined;
+    },
+    queryFn: ({ pageParam }) => api.previewItems(runId, filter, pageParam, PAGE_SIZE),
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
+  });
+}
+
+/// How the rows of the filter stand, loaded or not. The last answer stays while the
+/// next search loads, so the checkbox over them does not flicker.
+export function usePreviewChoiceQuery(runId: string, filter: PreviewFilter) {
+  return useQuery({
+    queryKey: ["preview", runId, "choice", filter],
+    queryFn: () => api.previewChoice(runId, filter),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -138,7 +142,19 @@ export function useSetItemProtectedMutation(runId: string) {
   });
 }
 
-/// True from a click on a row until the choice is stored and the counts are fresh.
+/// Keeps, or lets go again, every row of the filter at once.
+export function useSetItemsProtectedMutation(runId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: protectMutationKey(runId),
+    mutationFn: ({ filter, isProtected }: { filter: PreviewFilter; isProtected: boolean }) =>
+      api.setItemsProtected(runId, filter, isProtected),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["preview", runId] }),
+  });
+}
+
+/// True from a click on a row or on all of them until the choice is stored and the
+/// counts are fresh.
 export function useIsSavingProtection(runId: string) {
   return useIsMutating({ mutationKey: protectMutationKey(runId) }) > 0;
 }
