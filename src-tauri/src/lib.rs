@@ -540,7 +540,13 @@ async fn export_receipt(
             return Ok(None);
         };
         let path = chosen.into_path().map_err(|e| CommandError::msg(e.to_string()))?;
-        fs::write(&path, text)?;
+        // Written beside it first, so a failed write cannot spoil a file the person chose to replace.
+        let partial = path.with_extension("json.part");
+        let written = fs::write(&partial, text).and_then(|()| fs::rename(&partial, &path));
+        if written.is_err() {
+            let _ = fs::remove_file(&partial);
+        }
+        written?;
         Ok(Some(path.to_string_lossy().into_owned()))
     })
     .await?

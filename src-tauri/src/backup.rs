@@ -108,6 +108,14 @@ pub fn backup_target(
     if path.try_exists()? {
         return Err(CommandError::msg("this run already has a backup"));
     }
+    // Key files without a backup are left by a start that failed before writing it.
+    // Kept, they would make a backup under the keychain key ask for that passphrase.
+    for stale in [BACKUP_KEY_META_EXT, BACKUP_KEY_FILE_EXT] {
+        match fs::remove_file(path.with_extension(stale)) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+            _ => {}
+        }
+    }
     let key = match backup_passphrase {
         Some(passphrase) => passphrase_backup_key(&path, passphrase)?,
         None => backup_data_key()?,
@@ -435,6 +443,19 @@ mod tests {
             let refused = verify_backup(&dir, "r1", missing).err().map(|error| error.kind);
             assert_eq!(refused, Some(ErrorKind::PassphraseNeeded));
         }
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_start_that_failed_before_its_backup_leaves_no_passphrase_behind() {
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+        let dir = test_dir("backup-restart");
+        // Key files written, then the start failed before the archive.
+        backup_target(&dir, "r1", Some("first try")).unwrap();
+
+        backup_target(&dir, "r1", None).unwrap();
+
+        assert!(!needs_passphrase(&dir, "r1"));
         fs::remove_dir_all(dir).ok();
     }
 
