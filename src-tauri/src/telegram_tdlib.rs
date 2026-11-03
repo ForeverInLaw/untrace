@@ -147,13 +147,9 @@ impl TelegramState {
         self.resumed
             .get_or_init(|| async {
                 if let Err(error) = self.resume().await {
-                    // A cause the person can act on, such as a locked keychain, stays.
-                    let kind = match error.kind {
-                        ErrorKind::Unknown => ErrorKind::SessionExpired,
-                        known => known,
-                    };
+                    // Its own cause, such as a locked keychain; nothing says the session expired.
                     *self.resume_failure.lock().await = Some(CommandError::new(
-                        kind,
+                        error.kind,
                         format!("Could not reconnect the saved Telegram session: {}", error.message()),
                     ));
                 }
