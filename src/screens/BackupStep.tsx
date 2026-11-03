@@ -62,6 +62,8 @@ export function BackupStep() {
   const space = spaceQuery.data;
   const scopesQuery = usePreviewScopesQuery(runId, consent);
   const scopes = scopesQuery.data ?? [];
+  // Not before the chat list for these boxes is in, nor when it failed to load.
+  const scopesShown = scopesQuery.isSuccess && !scopesQuery.isPlaceholderData;
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId)?.display_name ?? platformId;
   const start = useStartRunMutation(platformId, apply);
   const period = usePeriodLabel();
@@ -75,7 +77,7 @@ export function BackupStep() {
     (deleteIncomplete || deleteForSelf ? 0 : summary?.consents_overlap ?? 0);
   const deleting = (summary?.pending ?? 0) - kept;
   const types = summary?.types.map(({ content_type: type }) => t(`contentType.${type}`).toLowerCase()).join(", ");
-  const error = errorMessage(start.error ?? summaryQuery.error ?? spaceQuery.error);
+  const error = errorMessage(start.error ?? summaryQuery.error ?? spaceQuery.error ?? scopesQuery.error);
   const formatBytes = useByteFormat();
 
   // Changing what goes also changes the count that was confirmed.
@@ -98,7 +100,7 @@ export function BackupStep() {
       actions={
         <>
           <Button onClick={() => goTo("preview")}>{t("backup.back")}</Button>
-          <Button disabled={!confirmed || start.isPending || deleting === 0 || spaceQuery.isPlaceholderData || scopesQuery.isPlaceholderData || !space?.fits} kind="primary" onClick={onStart}>
+          <Button disabled={!confirmed || start.isPending || deleting === 0 || spaceQuery.isPlaceholderData || !scopesShown || !space?.fits} kind="primary" onClick={onStart}>
             {t("backup.start", { count: deleting })}
           </Button>
         </>
