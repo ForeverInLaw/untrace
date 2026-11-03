@@ -87,6 +87,12 @@ export const ru = {
   "scope.checking": "Собираем записи…",
   "scope.moreConditions": "Период, типы и ключевое слово",
 
+  "remains.heading": "Что останется после удаления",
+  "remains.otherApps": "Копии в других приложениях и сервисах, в том числе в неофициальных клиентах, которые хранят удалённые сообщения.",
+  "remains.shares": "Пересылки, репосты и цитаты в чужих постах и ответах.",
+  "remains.saved": "Скриншоты и файлы, которые сохранили другие люди.",
+  "remains.archives": "Копии в веб-архивах и кеше поисковиков.",
+
   "chats.heading": "Из каких чатов удалить ваши сообщения?",
   "chats.progress": "Показаны только чаты, где есть ваши сообщения. Проверено {{checked}} из {{total}}.",
   "chats.done": "Показаны только чаты, где есть ваши сообщения: {{visible}} из {{total}}.",
@@ -107,6 +113,7 @@ export const ru = {
   "chats.selected": "Выбрано чатов: {{chats}}, ваших сообщений: {{messages, number}}.",
   "chats.selectedApproximate": "Выбрано чатов: {{chats}}, ваших сообщений: около {{messages, number}}.",
   "chats.selectedUnknown": "Выбрано чатов: {{chats}}. Точное число ваших сообщений покажет следующий шаг.",
+  "chats.leftNotListed": "Чатов, из которых вы вышли, здесь нет: ваши сообщения в них останутся.",
   "chats.noneSelected": "Выберите хотя бы один чат.",
 
   "preview.heading_one": "<n>{{count, number}}</n> запись будет удалена",
@@ -138,7 +145,6 @@ export const ru = {
   "preview.emptyProtected": "Защищённых записей нет.",
   "preview.search": "Поиск по тексту",
   "preview.notFound": "Ничего не нашлось по запросу «{{search}}».",
-  "preview.limit": "Копии в чужих архивах и кеше поисковиков Untrace удалить не может.",
   "preview.editScope": "Изменить условия",
   "preview.next": "Дальше: резервная копия",
 

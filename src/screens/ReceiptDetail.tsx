@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { Seal } from "../components/Seal";
+import { RemainsElsewhere } from "../components/RemainsElsewhere";
 import { Button, Notice, Screen } from "../components/ui";
 import { errorMessage, isPassphraseRefusal } from "../lib/errors";
 import { accountName, useDateFormat } from "../lib/format";
@@ -112,7 +113,6 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
         <Trans components={{ n: <em className="count" /> }} count={summary.deleted} i18nKey="receipt.heading" />
       }
       lead={summary.failed > 0 ? t("receipt.failedLine", { count: summary.failed }) : undefined}
-      note={t("preview.limit")}
     >
       {onlyForSelf > 0 && <Notice tone="caution">{t("receipt.onlyForSelfLine", { count: onlyForSelf })}</Notice>}
       <div className="receipt">
@@ -166,6 +166,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
           </figcaption>
         </figure>
       </div>
+      <RemainsElsewhere />
       {/* Kept before the receipt, so once the receipt is there these are too. */}
       <RunChatResults ended={hasReceipt} runId={runId} />
       <UnsavedFilesSection account={summary.account_label} platformId={summary.platform} runId={runId} />

@@ -83,6 +83,12 @@ export const en = {
   "scope.checking": "Collecting items…",
   "scope.moreConditions": "Period, types and keyword",
 
+  "remains.heading": "What stays after deletion",
+  "remains.otherApps": "Copies in other apps and services, including unofficial clients that keep deleted messages.",
+  "remains.shares": "Forwards, reposts and quotes in other people's posts and replies.",
+  "remains.saved": "Screenshots and files that other people saved.",
+  "remains.archives": "Copies in web archives and search engine caches.",
+
   "chats.heading": "Which chats should your messages go from?",
   "chats.progress": "Showing only chats with your messages. Checked {{checked}} of {{total}}.",
   "chats.done": "Showing only chats with your messages: {{visible}} of {{total}}.",
@@ -103,6 +109,7 @@ export const en = {
   "chats.selected": "Chats selected: {{chats}}, your messages: {{messages, number}}.",
   "chats.selectedApproximate": "Chats selected: {{chats}}, your messages: about {{messages, number}}.",
   "chats.selectedUnknown": "Chats selected: {{chats}}. The next step shows exactly how many of your messages they hold.",
+  "chats.leftNotListed": "Chats you have left aren't listed, so your messages in them stay.",
   "chats.noneSelected": "Pick at least one chat.",
 
   "preview.heading_one": "<n>{{count, number}}</n> item will be deleted",
@@ -132,7 +139,6 @@ export const en = {
   "preview.emptyProtected": "No protected items.",
   "preview.search": "Search by text",
   "preview.notFound": "Nothing found for “{{search}}”.",
-  "preview.limit": "Untrace can't reach copies in other people's archives and search caches.",
   "preview.editScope": "Change conditions",
   "preview.next": "Next: backup",
 

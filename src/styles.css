@@ -829,6 +829,15 @@ small {
   color: var(--ink);
 }
 
+.remains {
+  display: grid;
+  gap: 4px;
+  max-width: 70ch;
+  margin: 4px 0 8px;
+  padding-left: 38px;
+  list-style: disc;
+}
+
 /* Search */
 
 .search {

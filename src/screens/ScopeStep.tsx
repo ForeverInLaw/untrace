@@ -1,6 +1,6 @@
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button, Checkbox, CheckboxLabel, Notice, Screen, Switch, TextAreaField, TextField } from "../components/ui";
+import { Button, Checkbox, CheckboxLabel, Disclosure, Notice, Screen, Switch, TextAreaField, TextField } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import type { ContentType, DryRunResult, OwnMessageCount, TelegramChatSummary } from "../lib/tauri";
 import { usePlatformsQuery } from "../queries/platforms";
@@ -242,13 +242,10 @@ function TelegramScope() {
           <RefreshCw aria-hidden="true" size={16} />
         </button>
       </div>
-      <details className="disclosure">
-        <summary>
-          <ChevronRight aria-hidden="true" className="disclosure__icon" size={16} />
-          {t("scope.moreConditions")}
-        </summary>
+      <Disclosure summary={t("scope.moreConditions")}>
         <ConditionRows withProtect={false} />
-      </details>
+      </Disclosure>
+      <p className="help">{t("chats.leftNotListed")}</p>
       {error && <Notice tone="fault">{error}</Notice>}
       <div className="table-scroll">
         <table className="table">
