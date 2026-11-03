@@ -298,7 +298,7 @@ export const ru = {
   "receipt.signed": "Подписано на этом устройстве",
   "receipt.passphrase": "Пароль копии",
   "receipt.export": "Сохранить квитанцию",
-  "receipt.exported": "Квитанция сохранена в {{path}}. Её подпись можно проверить и без Untrace.",
+  "receipt.exported": "Квитанция сохранена в {{path}}.",
   "receipt.verify": "Проверить копию",
   "receipt.newCleanup": "Новая чистка",
 

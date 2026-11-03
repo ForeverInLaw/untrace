@@ -270,7 +270,7 @@ export const en = {
   "receipt.signed": "Signed on this device",
   "receipt.passphrase": "Backup password",
   "receipt.export": "Save receipt",
-  "receipt.exported": "Receipt saved to {{path}}. Anyone can check its signature without Untrace.",
+  "receipt.exported": "Receipt saved to {{path}}.",
   "receipt.verify": "Verify backup",
   "receipt.newCleanup": "New cleanup",
 

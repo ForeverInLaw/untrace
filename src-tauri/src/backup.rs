@@ -209,13 +209,18 @@ fn open_backup(
     backup_passphrase: Option<&str>,
 ) -> Result<(fs::File, DataKey), CommandError> {
     let path = backup_path(base_dir, run_id);
-    let key = match backup_passphrase.filter(|passphrase| !passphrase.is_empty()) {
-        Some(passphrase) => unwrap_passphrase_backup_key(&path, passphrase)?,
-        // The keychain key would only fail to decrypt it, which reads as damage.
-        None if needs_passphrase(base_dir, run_id) => {
-            return Err(CommandError::new(ErrorKind::PassphraseNeeded, "this backup needs its passphrase"));
+    // The backup decides which key opens it: a passphrase it was not written with
+    // is ignored, and without the one it was, the keychain key would only fail to
+    // decrypt it, which reads as damage.
+    let key = if needs_passphrase(base_dir, run_id) {
+        match backup_passphrase.filter(|passphrase| !passphrase.is_empty()) {
+            Some(passphrase) => unwrap_passphrase_backup_key(&path, passphrase)?,
+            None => {
+                return Err(CommandError::new(ErrorKind::PassphraseNeeded, "this backup needs its passphrase"));
+            }
         }
-        None => backup_data_key()?,
+    } else {
+        backup_data_key()?
     };
     let file = fs::File::open(&path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
