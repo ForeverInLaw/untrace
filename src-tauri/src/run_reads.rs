@@ -151,10 +151,10 @@ pub struct PreviewFilter {
 }
 
 impl PreviewFilter {
-    /// Hands the store's form of this filter to `read`.
-    fn with<T>(&self, read: impl FnOnce(&ItemFilter) -> T) -> T {
+    /// Runs `use_filter` with the store's form of this filter.
+    fn apply<T>(&self, use_filter: impl FnOnce(&ItemFilter) -> T) -> T {
         let matching_subtypes: Vec<&str> = self.matching_subtypes.iter().map(String::as_str).collect();
-        read(&ItemFilter {
+        use_filter(&ItemFilter {
             group: self.group,
             content_type: self.content_type,
             search: &self.search,
@@ -172,7 +172,7 @@ pub async fn preview_items(
     limit: u32,
 ) -> Result<Vec<PreviewItem>, CommandError> {
     let store = state.reader.lock().await;
-    let rows = filter.with(|&filter| store.preview_items(&run_id, &ItemQuery { filter, offset, limit }))?;
+    let rows = filter.apply(|&filter| store.preview_items(&run_id, &ItemQuery { filter, offset, limit }))?;
     Ok(rows
         .into_iter()
         .map(|row| PreviewItem {
@@ -212,7 +212,7 @@ pub async fn set_items_protected(
     protected: bool,
 ) -> Result<u64, CommandError> {
     let store = state.reader.lock().await;
-    Ok(filter.with(|filter| store.set_items_protected(&run_id, filter, protected))?)
+    Ok(filter.apply(|filter| store.set_items_protected(&run_id, filter, protected))?)
 }
 
 /// How the rows the filter covers stand, for the checkbox over all of them.
@@ -223,7 +223,7 @@ pub async fn preview_choice(
     filter: PreviewFilter,
 ) -> Result<ChoiceCounts, CommandError> {
     let store = state.reader.lock().await;
-    Ok(filter.with(|filter| store.choice_counts(&run_id, filter))?)
+    Ok(filter.apply(|filter| store.choice_counts(&run_id, filter))?)
 }
 
 #[tauri::command]

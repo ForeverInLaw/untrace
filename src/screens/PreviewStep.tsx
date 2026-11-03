@@ -112,6 +112,7 @@ function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
   const items = usePreviewItemsQuery(runId, listed);
   const choice = usePreviewChoiceQuery(runId, listed);
   const chooseAll = useSetItemsProtectedMutation(runId);
+  const saving = useIsSavingProtection(runId);
   const rows = items.data?.pages.flat() ?? [];
   const { going, kept } = choice.data ?? { going: 0, kept: 0 };
 
@@ -126,7 +127,8 @@ function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
                 <Checkbox
                   aria-label={t("preview.toggleAll")}
                   checked={going > 0 && kept === 0}
-                  disabled={going + kept === 0 || chooseAll.isPending}
+                  // Counts of the last search, or from before a save, would choose for the wrong rows.
+                  disabled={going + kept === 0 || saving || choice.isPlaceholderData}
                   indeterminate={going > 0 && kept > 0}
                   onChange={() => chooseAll.mutate({ filter: listed, isProtected: going > 0 })}
                 />

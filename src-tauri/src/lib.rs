@@ -386,10 +386,9 @@ fn claim_run_slot(
 
 /// Phase-2 machinery shared by every platform's start command: wire backup +
 /// receipt + controls and fire the run on its own thread. The authed adapter is
-/// the only platform-specific input, so a new platform's start command just
-/// builds its adapter and calls this.
-/// Runs a previewed run. `adapter` is handed the run's control, to call off work in
-/// progress on a stop.
+/// the only platform-specific input, so a new platform's start command just says
+/// how to build it. It is handed the run's control, to call off work in progress
+/// on a stop.
 pub(crate) async fn execute_previewed_run(
     state: &AppState,
     adapter: impl FnOnce(RunControl) -> Arc<dyn PlatformAdapter>,
