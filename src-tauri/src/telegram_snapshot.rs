@@ -16,6 +16,7 @@ use lethe_telegram::tdlib_bridge::{
 };
 use lethe_telegram::{message_token, parse_message_ref, DeletePlan};
 use tauri::State;
+use tokio::sync::watch;
 
 use super::{own_message_page, parse_chat_id, TelegramState};
 use crate::telegram::TelegramDryRunRequest;
@@ -39,7 +40,7 @@ pub async fn telegram_dry_run_chats(
         .collect::<Result<Vec<_>, _>>()?;
     let filter = run_filters::to_filter_spec(&req.filter)?;
     let filter_json = serde_json::to_string(&req.filter)?;
-    let adapter = snapshot_items_for_chats(client, current_user_id, &chat_ids)
+    let adapter = snapshot_items_for_chats(client, current_user_id, &chat_ids, state.connection())
         .await
         .map_err(|e| CommandError::msg(e.to_string()))?;
     let run_id = format!("telegram-{}", now_secs());
@@ -95,20 +96,32 @@ pub struct TelegramSnapshotAdapter {
     items: Vec<Item>,
     client: TdlibClientId,
     current_user_id: i64,
+    /// Whether TDLib is connected to Telegram.
+    connection: watch::Receiver<bool>,
 }
 
 impl TelegramSnapshotAdapter {
     /// Execute-phase adapter: Phase 2 reads pending rows from the store, so it
     /// only needs delete + rate_policy. ponytail: empty item set is correct —
     /// enumerate is never called during execute.
-    pub fn for_execute(client: TdlibClientId, current_user_id: i64) -> Self {
-        Self::new(Vec::new(), client, current_user_id)
+    pub fn for_execute(
+        client: TdlibClientId,
+        current_user_id: i64,
+        connection: watch::Receiver<bool>,
+    ) -> Self {
+        Self::new(Vec::new(), client, current_user_id, connection)
     }
 
-    pub fn new(items: Vec<Item>, client: TdlibClientId, current_user_id: i64) -> Self {
+    pub fn new(
+        items: Vec<Item>,
+        client: TdlibClientId,
+        current_user_id: i64,
+        connection: watch::Receiver<bool>,
+    ) -> Self {
         Self {
             client,
             current_user_id,
+            connection,
             descriptor: Descriptor {
                 id: "telegram",
                 display_name: "Telegram",
@@ -168,7 +181,16 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
     ) -> Result<FetchedMedia, AdapterError> {
         let (chat_id, message_id) = parse_message_ref(item)
             .ok_or_else(|| AdapterError::Platform("unparseable Telegram message ref".into()))?;
-        download_message_file(self.client, chat_id, message_id, &media.url).await
+        let mut connection = self.connection.clone();
+        let connection_lost = async move {
+            // A closed channel means the client is gone, which is no connection either.
+            let _ = connection.wait_for(|online| !online).await;
+        };
+        download_message_file(self.client, chat_id, message_id, &media.url, connection_lost).await
+    }
+
+    async fn is_reachable(&self) -> bool {
+        *self.connection.borrow()
     }
 
     async fn release_media(&self, file: &FetchedMedia) -> Result<(), AdapterError> {
@@ -188,6 +210,7 @@ pub async fn snapshot_items_for_chats(
     client: TdlibClientId,
     current_user_id: i64,
     chat_ids: &[i64],
+    connection: watch::Receiver<bool>,
 ) -> Result<Arc<dyn PlatformAdapter>, AdapterError> {
     let mut items = Vec::new();
     for chat_id in chat_ids {
@@ -230,5 +253,5 @@ pub async fn snapshot_items_for_chats(
             from_message_id = page.next_from_message_id;
         }
     }
-    Ok(Arc::new(TelegramSnapshotAdapter::new(items, client, current_user_id)))
+    Ok(Arc::new(TelegramSnapshotAdapter::new(items, client, current_user_id, connection)))
 }

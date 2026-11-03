@@ -7,6 +7,8 @@ export type ProgressEvent =
   | { event: "archiving"; data: { done_bytes: number; total_bytes: number } }
   | { event: "deleting"; data: { deleted: number; skipped: number; failed: number; total: number } }
   | { event: "throttled"; data: { rate_per_sec: number; wait_secs: number } }
+  | { event: "offline" }
+  | { event: "online" }
   | { event: "done"; data: { run_id: string } }
   | { event: "error"; data: { message: string } };
 

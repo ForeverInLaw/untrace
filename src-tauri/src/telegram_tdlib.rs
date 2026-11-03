@@ -12,7 +12,7 @@ use lethe_telegram::tdlib_bridge::{
 use tauri::ipc::Channel;
 use tauri::State;
 use tdlib_rs::{enums, functions};
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::{watch, Mutex, OnceCell};
 
 use crate::secrets::{hex_encode, keychain_data_key, SESSION_KEY_USER};
 use crate::telegram::{
@@ -38,7 +38,7 @@ pub struct TelegramState {
     inner: Mutex<TelegramInner>,
     auth_states: Arc<Mutex<HashMap<i32, TelegramAuthStatus>>>,
     /// Whether TDLib last reported a working connection to Telegram.
-    online: Arc<AtomicBool>,
+    online: Arc<watch::Sender<bool>>,
     receiver_started: AtomicBool,
     api_key: ApiKeyKeeper<KeychainVault>,
     /// Set once the saved session has had its chance to reconnect.
@@ -62,7 +62,7 @@ impl TelegramState {
             root_dir,
             inner: Mutex::new(TelegramInner::default()),
             auth_states: Arc::new(Mutex::new(HashMap::new())),
-            online: Arc::new(AtomicBool::new(false)),
+            online: Arc::new(watch::Sender::new(false)),
             receiver_started: AtomicBool::new(false),
             api_key: ApiKeyKeeper::new(KeychainVault),
             resumed: OnceCell::new(),
@@ -96,7 +96,7 @@ impl TelegramState {
                         update.state,
                         enums::ConnectionState::Ready | enums::ConnectionState::Updating
                     );
-                    online.store(reachable, Ordering::Release);
+                    online.send_replace(reachable);
                 }
                 _ => {}
             }
@@ -123,7 +123,7 @@ impl TelegramState {
             client: Some(client),
             ..TelegramInner::default()
         };
-        self.online.store(false, Ordering::Release);
+        self.online.send_replace(false);
         auth_states.insert(client.raw(), starting_status());
         client
     }
@@ -221,6 +221,11 @@ impl TelegramState {
         }
     }
 
+    /// Follows TDLib's connection to Telegram, for a run to wait out an outage.
+    pub(super) fn connection(&self) -> watch::Receiver<bool> {
+        self.online.subscribe()
+    }
+
     pub(super) async fn ready_context(
         &self,
     ) -> Result<(TelegramAuthStatus, TdlibClientId, i64), CommandError> {
@@ -289,7 +294,7 @@ impl TelegramState {
             enums::AuthorizationState::Closed => return Ok(()),
             // Nothing is signed in yet, so there is no session to end on the server.
             enums::AuthorizationState::WaitTdlibParameters => functions::close(client.raw()).await,
-            enums::AuthorizationState::Ready if !self.online.load(Ordering::Acquire) => {
+            enums::AuthorizationState::Ready if !*self.online.borrow() => {
                 return Err(CommandError::msg(
                     "Telegram is unreachable. Sign out again once the connection is back.",
                 ));
@@ -592,7 +597,7 @@ pub async fn telegram_start_run(
     // store, so the execute adapter needs only the client + whose messages they are.
     let (_auth, client, current_user_id) = state.ready_context().await?;
     let adapter: Arc<dyn PlatformAdapter> = Arc::new(
-        snapshot::TelegramSnapshotAdapter::for_execute(client, current_user_id),
+        snapshot::TelegramSnapshotAdapter::for_execute(client, current_user_id, state.connection()),
     );
 
     crate::execute_previewed_run(

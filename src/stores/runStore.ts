@@ -20,6 +20,8 @@ interface RunState {
   archiveTotalBytes: number;
   /// Seconds until the platform's rate limit lifts; null when not limited.
   throttleWaitSecs: number | null;
+  /// The platform stopped answering; the run waits for it.
+  offline: boolean;
   paused: boolean;
   status: RunStatus;
   message: string | null;
@@ -38,6 +40,7 @@ const initial = {
   archivedBytes: 0,
   archiveTotalBytes: 0,
   throttleWaitSecs: null,
+  offline: false,
   paused: false,
   status: "idle" as RunStatus,
   message: null,
@@ -59,10 +62,14 @@ export const useRunStore = create<RunState>((set) => ({
           return { ...e.data, status: "deleting", throttleWaitSecs: null };
         case "throttled":
           return { throttleWaitSecs: e.data.wait_secs };
+        case "offline":
+          return { offline: true };
+        case "online":
+          return { offline: false };
         case "done":
           return { status: "done", throttleWaitSecs: null };
         case "error":
-          return { status: "error", message: e.data.message, throttleWaitSecs: null };
+          return { status: "error", message: e.data.message, throttleWaitSecs: null, offline: false };
       }
     }),
   setPaused: (paused) => set({ paused }),

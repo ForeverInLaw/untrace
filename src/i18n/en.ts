@@ -176,6 +176,7 @@ export const en = {
   "run.skipped": "Already gone",
   "run.failed": "Errors",
   "run.throttled": "{{platform}} limited the speed. Continuing in about {{seconds}} s, nothing to do.",
+  "run.offline": "No connection to {{platform}}. The run continues by itself once it is back.",
   "run.note": "You can stop at any time: what's deleted won't come back, the rest stays in place.",
   "run.pause": "Pause",
   "run.resume": "Resume",
