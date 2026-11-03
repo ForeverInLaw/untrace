@@ -59,10 +59,12 @@ export function ExportBackupButton({ runId, backupPassphrase, kind, disabled }: 
   const { t } = useTranslation();
   const exportBackup = useExportBackupMutation(runId);
   const exporting = useIsExporting(runId);
+  // The backend reports progress only once the export can be stopped.
+  const stoppable = useExportStore((s) => runId in s.progress);
   const stop = useStopExportMutation();
   if (exporting) {
     return (
-      <Button disabled={stop.isPending} kind={kind} onClick={() => stop.mutate(runId)}>
+      <Button disabled={!stoppable || stop.isPending} kind={kind} onClick={() => stop.mutate(runId)}>
         {t("backup.stopExport")}
       </Button>
     );
