@@ -63,7 +63,7 @@ export const useRunStore = create<RunState>((set) => ({
         case "throttled":
           return { throttleWaitSecs: e.data.wait_secs };
         case "offline":
-          return { offline: true };
+          return { offline: true, throttleWaitSecs: null };
         case "online":
           return { offline: false };
         case "done":
