@@ -122,7 +122,7 @@ export const en = {
   "preview.noText": "No text",
   "preview.subtypeWithText": "{{subtype}}: {{text}}",
   "preview.toggleRow": "Delete this item",
-  "preview.more": "Show more",
+  "table.more": "Show more",
   "preview.empty": "Nothing matched the conditions, so there is nothing to delete.",
   "preview.emptyUndeletable": "Everything that matched is out of your reach: the platform won't let this account delete it.",
   "preview.emptyProtected": "No protected items.",

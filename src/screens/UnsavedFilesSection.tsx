@@ -70,7 +70,7 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
           </tbody>
         </table>
         {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
-        <MoreRows rows={items} />
+        <MoreRows query={items} />
       </div>
       <NewBackupPassphraseField onChange={setPassphrase} value={passphrase} />
       {unsaved.unavailable > 0 && (

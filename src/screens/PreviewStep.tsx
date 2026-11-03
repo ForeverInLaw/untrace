@@ -137,7 +137,7 @@ function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
         </p>
       )}
       {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
-      <MoreRows rows={items} />
+      <MoreRows query={items} />
     </div>
   );
 }

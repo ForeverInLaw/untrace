@@ -128,7 +128,7 @@ export const ru = {
   "preview.noText": "Без текста",
   "preview.subtypeWithText": "{{subtype}}: {{text}}",
   "preview.toggleRow": "Удалить эту запись",
-  "preview.more": "Показать ещё",
+  "table.more": "Показать ещё",
   "preview.empty": "Под условия ничего не попало, удалять нечего.",
   "preview.emptyUndeletable": "Всё, что подошло под условия, платформа не даёт удалить этому аккаунту.",
   "preview.emptyProtected": "Защищённых записей нет.",
