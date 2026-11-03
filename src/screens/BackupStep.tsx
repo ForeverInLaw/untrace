@@ -7,7 +7,6 @@ import { usePlatformsQuery } from "../queries/platforms";
 import type { RunConsent } from "../lib/tauri";
 import { useBackupSpaceQuery, usePreviewScopesQuery, usePreviewSummaryQuery, useStartRunMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
-import { useRunStore } from "../stores/runStore";
 import { NewBackupPassphraseField } from "./BackupExport";
 import { ChatCounts } from "./ChatCounts";
 
@@ -47,7 +46,6 @@ export function BackupStep() {
   const passphrase = useFlowStore((s) => s.passphrase);
   const setPassphrase = useFlowStore((s) => s.setPassphrase);
   const goTo = useFlowStore((s) => s.goTo);
-  const apply = useRunStore((s) => s.apply);
   const [confirmed, setConfirmed] = useState(false);
   const [deleteIncomplete, setDeleteIncomplete] = useState(false);
   const [deleteForSelf, setDeleteForSelf] = useState(false);
@@ -65,7 +63,7 @@ export function BackupStep() {
   // Not before the chat list for these boxes is in, nor when it failed to load.
   const scopesShown = scopesQuery.isSuccess && !scopesQuery.isPlaceholderData;
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId)?.display_name ?? platformId;
-  const start = useStartRunMutation(platformId, apply);
+  const start = useStartRunMutation(platformId);
   const period = usePeriodLabel();
   const gaps = summary?.backup_gaps ?? 0;
   const onlyForSelf = summary?.only_for_self ?? 0;
