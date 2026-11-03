@@ -92,6 +92,12 @@ export interface TelegramAuthStatus {
   confirmation_link: string | null;
 }
 
+/// A chat's count of the user's messages; `exact` is false for TDLib's estimate.
+export interface OwnMessageCount {
+  count: number;
+  exact: boolean;
+}
+
 export interface TelegramChatSummary {
   id: string;
   title: string;
@@ -348,7 +354,7 @@ export const api = {
   telegramAuthPassword: (req: TelegramAuthPasswordRequest) =>
     invoke<TelegramAuthStatus>("telegram_auth_password", { req }),
   telegramOwnMessageCount: (chatId: string) =>
-    invoke<number>("telegram_own_message_count", { chatId }),
+    invoke<OwnMessageCount>("telegram_own_message_count", { chatId }),
   telegramDryRunChats: (req: TelegramDryRunRequest) =>
     invoke<DryRunResult>("telegram_dry_run_chats", { req }),
 

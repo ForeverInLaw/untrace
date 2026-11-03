@@ -2,7 +2,7 @@ import { ChevronRight, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, Checkbox, CheckboxLabel, Notice, Screen, Switch, TextAreaField, TextField } from "../components/ui";
 import { errorMessage } from "../lib/errors";
-import type { ContentType, DryRunResult, TelegramChatSummary } from "../lib/tauri";
+import type { ContentType, DryRunResult, OwnMessageCount, TelegramChatSummary } from "../lib/tauri";
 import { usePlatformsQuery } from "../queries/platforms";
 import { useDryRunMutation } from "../queries/runs";
 import {
@@ -149,7 +149,7 @@ function BlueskyScope() {
   );
 }
 
-function ChatRow({ chat, count }: { chat: TelegramChatSummary; count: number | null | undefined }) {
+function ChatRow({ chat, count }: { chat: TelegramChatSummary; count: OwnMessageCount | null | undefined }) {
   const { t } = useTranslation();
   const selected = useFlowStore((s) => s.chatIds.includes(chat.id));
   const toggleChat = useFlowStore((s) => s.toggleChat);
@@ -169,9 +169,9 @@ function ChatRow({ chat, count }: { chat: TelegramChatSummary; count: number | n
       </td>
       <td className="cell-text">{chat.title || chat.id}</td>
       <td className="cell-meta">{t(`chats.kind.${chat.kind}`)}</td>
-      {typeof count === "number" ? (
+      {count ? (
         <td className={`cell-count ${selected ? "cell-count--selected" : ""}`}>
-          {t("cleanup.plainNumber", { value: count })}
+          {t(count.exact ? "cleanup.plainNumber" : "chats.approximate", { value: count.count })}
         </td>
       ) : (
         <td className="cell-count cell-count--unknown">{t(unsupported ? "chats.unsupported" : "chats.unknown")}</td>
@@ -192,13 +192,16 @@ function TelegramScope() {
   const recount = useRecountOwnMessages(account);
   const dryRun = useTelegramDryRunChatsMutation();
   const onReady = usePreviewReady();
-  const visible = chats.filter((chat) => chat.id in counts && counts[chat.id] !== 0);
-  const knownCounts = chatIds.map((id) => counts[id]).filter((count) => typeof count === "number");
-  const messages = knownCounts.reduce((sum, count) => sum + count, 0);
+  const visible = chats.filter((chat) => chat.id in counts && counts[chat.id]?.count !== 0);
+  const knownCounts = chatIds.map((id) => counts[id]).filter((count) => count != null);
+  const messages = knownCounts.reduce((sum, { count }) => sum + count, 0);
   const filter = toFilterRequest(draft, available);
   const error = errorMessage(dryRun.error ?? status.error ?? status.data?.blocker);
   const selectionNote = knownCounts.length === chatIds.length
-    ? t("chats.selected", { chats: chatIds.length, messages })
+    ? t(knownCounts.every(({ exact }) => exact) ? "chats.selected" : "chats.selectedApproximate", {
+      chats: chatIds.length,
+      messages,
+    })
     : t("chats.selectedUnknown", { chats: chatIds.length });
 
   const onCheck = async () => {

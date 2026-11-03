@@ -15,7 +15,7 @@ use tokio::sync::{watch, Mutex, OnceCell};
 
 use crate::secrets::{hex_encode, keychain_data_key, SESSION_KEY_USER};
 use crate::telegram::{
-    TelegramAuthCodeRequest, TelegramAuthPasswordRequest, TelegramAuthPhase,
+    OwnMessageCount, TelegramAuthCodeRequest, TelegramAuthPasswordRequest, TelegramAuthPhase,
     TelegramAuthStartRequest, TelegramAuthStatus, TelegramChatSummary, TelegramDryRunRequest,
     TelegramScopeKind, TelegramScopeStatus,
 };
@@ -539,17 +539,23 @@ async fn own_message_page(
     }
 }
 
-/// How many of the user's messages a chat holds; the count is approximate for large chats.
+/// One search of this many messages counts most chats exactly, at the cost of one.
+const OWN_COUNT_PAGE: i32 = 100;
+
+/// How many of the user's messages a chat holds: exact for a chat whose messages fit
+/// one page, TDLib's estimate for a larger one.
 #[tauri::command]
 pub async fn telegram_own_message_count(
     state: State<'_, TelegramState>,
     chat_id: String,
-) -> Result<usize, CommandError> {
+) -> Result<OwnMessageCount, CommandError> {
     let (_auth, client, current_user_id) = state.ready_context().await?;
-    let page = own_message_page(client, parse_chat_id(&chat_id)?, current_user_id, 0, 1).await?;
-    Ok(usize::try_from(page.total_count)
-        .unwrap_or(0)
-        .max(page.messages.len()))
+    let page = own_message_page(client, parse_chat_id(&chat_id)?, current_user_id, 0, OWN_COUNT_PAGE).await?;
+    Ok(OwnMessageCount::from_first_page(
+        page.messages.len(),
+        page.total_count,
+        OWN_COUNT_PAGE as usize,
+    ))
 }
 
 #[tauri::command]
