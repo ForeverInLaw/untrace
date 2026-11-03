@@ -208,11 +208,20 @@ export function useExportBackupMutation(runId: string) {
   const end = useExportStore((s) => s.end);
   return useMutation({
     mutationKey: exportMutationKey(runId),
+    // The outcome says where the unencrypted folder went, so it stays until the app closes.
+    gcTime: Infinity,
     mutationFn: async (backupPassphrase: string | null) => {
+      // A refused second export never reports, and must not end the first one's progress.
+      let reported = false;
       try {
-        return await api.exportBackup({ runId, backupPassphrase }, (progress) => report(runId, progress));
+        return await api.exportBackup({ runId, backupPassphrase }, (progress) => {
+          reported = true;
+          report(runId, progress);
+        });
       } finally {
-        end(runId);
+        if (reported) {
+          end(runId);
+        }
       }
     },
   });
