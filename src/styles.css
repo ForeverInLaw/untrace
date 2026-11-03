@@ -1081,6 +1081,10 @@ small {
   color: var(--fault);
 }
 
+.fact-caution {
+  color: var(--caution);
+}
+
 .confirm {
   display: grid;
   gap: 10px;

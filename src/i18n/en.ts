@@ -211,6 +211,7 @@ export const en = {
   "receipt.backupUnchecked": "Not checked yet",
   "receipt.backupOk": "Verified. Items: {{items, number}}, files: {{files, number}}",
   "receipt.backupBad": "Verification failed",
+  "receipt.backupCutOff": "The backup breaks off and is intact up to the break. Items: {{items, number}}, files: {{files, number}}. Whatever came after is missing",
   "receipt.signature": "Signature",
   "receipt.copySignature": "Copy signature",
   "receipt.signed": "Signed on this device",

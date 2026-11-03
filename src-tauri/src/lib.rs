@@ -46,6 +46,8 @@ const STORE_FILE: &str = "untrace.db";
 const BACKUP_DIR: &str = "backups";
 const SESSION_DIR: &str = "sessions";
 const TELEGRAM_DIR: &str = "telegram";
+/// Where a Bluesky file waits, unencrypted, until the backup has it.
+const DOWNLOADS_DIR: &str = "downloads";
 const ANOTHER_RUN_IS_LIVE: &str = "another cleanup is still running";
 
 pub struct AppState {
@@ -60,6 +62,7 @@ pub struct AppState {
     pub pds_host: String,
     pub backup_dir: PathBuf,
     pub session_dir: PathBuf,
+    pub downloads_dir: PathBuf,
 }
 
 #[derive(Clone)]
@@ -171,6 +174,7 @@ async fn authed_adapter(
     egress: Arc<lethe_net::Egress>,
     pds_host: &str,
     session_dir: &std::path::Path,
+    downloads_dir: &std::path::Path,
     platform: &str,
     account_label: &str,
 ) -> Result<Arc<dyn PlatformAdapter>, CommandError> {
@@ -184,7 +188,7 @@ async fn authed_adapter(
         account_label: account_label.to_owned(),
         secret: SecretBlob(blob),
     };
-    let mut adapter = BlueskyAdapter::new(egress, pds_host);
+    let mut adapter = BlueskyAdapter::new(egress, pds_host).download_to(downloads_dir.to_owned());
     adapter.authenticate(&cred).await?;
     Ok(Arc::new(adapter))
 }
@@ -248,6 +252,7 @@ async fn dry_run(
         state.egress.clone(),
         &state.pds_host,
         &state.session_dir,
+        &state.downloads_dir,
         &req.platform,
         &req.account_label,
     )
@@ -328,6 +333,7 @@ async fn start_run(
         state.egress.clone(),
         &state.pds_host,
         &state.session_dir,
+        &state.downloads_dir,
         &pending.platform,
         &pending.account_label,
     )
@@ -625,9 +631,15 @@ pub fn run() {
             let backup_dir = app_data_dir.join(BACKUP_DIR);
             let session_dir = app_data_dir.join(SESSION_DIR);
             let telegram_dir = app_data_dir.join(TELEGRAM_DIR);
+            let downloads_dir = app_data_dir.join(DOWNLOADS_DIR);
             fs::create_dir_all(&backup_dir)?;
             fs::create_dir_all(&session_dir)?;
             fs::create_dir_all(&telegram_dir)?;
+            // Before TDLib starts, so its files folder is not in use.
+            backup::empty_download_dirs(&[
+                downloads_dir.clone(),
+                telegram_dir.join(telegram::FILES_DIR),
+            ])?;
             let store = open_app_store(app)?;
             // No run is previewed or under way yet, so what none can use goes now.
             store.forget_stale_runs()?;
@@ -643,6 +655,7 @@ pub fn run() {
                 pds_host,
                 backup_dir,
                 session_dir,
+                downloads_dir,
             });
             app.manage(telegram::TelegramState::new(telegram_dir));
             Ok(())

@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+/// TDLib's files folder under the Telegram folder. A downloaded file sits there
+/// unencrypted until the backup has it and it is deleted.
+pub const FILES_DIR: &str = "files";
+
 #[cfg(not(any(
     feature = "telegram-tdlib-docs",
     feature = "telegram-tdlib-local",

@@ -85,8 +85,11 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   const onlyForSelf = summary.deleted_only_for_self ?? 0;
   const keptOnlyForSelf = summary.kept_only_for_self ?? 0;
   const undeletable = summary.undeletable ?? 0;
+  const verifiedCounts = verify.data && { items: verify.data.items, files: verify.data.media_files };
   const backupLine = verify.data?.ok
-    ? <span className="fact-safe">{t("receipt.backupOk", { items: verify.data.items, files: verify.data.media_files })}</span>
+    ? verify.data.complete
+      ? <span className="fact-safe">{t("receipt.backupOk", verifiedCounts)}</span>
+      : <span className="fact-caution">{t("receipt.backupCutOff", verifiedCounts)}</span>
     : verifyFailed
       ? <span className="fact-fault">{t("receipt.backupBad")}</span>
       : t("receipt.backupUnchecked");

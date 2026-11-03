@@ -21,6 +21,9 @@ pub struct BackupVerification {
     pub ok: bool,
     pub items: u64,
     pub media_files: u64,
+    /// False when the backup breaks off before it was sealed. What it holds up to
+    /// there is intact and counted.
+    pub complete: bool,
 }
 
 /// What an export left in the folder the person chose.
@@ -118,7 +121,21 @@ pub fn verify_backup(
         ok: true,
         items: audit.items,
         media_files: audit.media_files,
+        complete: audit.complete,
     })
+}
+
+/// Empties the folders where a file waits, unencrypted, until the backup has it.
+/// Anything there on startup was left by a run that died first, and no run can be
+/// using it yet.
+pub fn empty_download_dirs(dirs: &[PathBuf]) -> std::io::Result<()> {
+    for dir in dirs {
+        match fs::remove_dir_all(dir) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+            _ => fs::create_dir_all(dir)?,
+        }
+    }
+    Ok(())
 }
 
 /// Exports a backup into a new folder under the one `pick_folder` returns. The key
@@ -456,9 +473,47 @@ mod tests {
 
         let ok = verify_backup(&dir, "r1", Some("correct horse")).unwrap();
         assert!(ok.ok);
+        assert!(ok.complete);
         assert_eq!(ok.items, 1);
         assert_eq!(ok.media_files, 1);
         assert!(verify_backup(&dir, "r1", Some("wrong horse")).is_err());
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_backup_that_breaks_off_verifies_as_incomplete_with_what_it_holds() {
+        let dir = test_dir("backup");
+        let target = backup_target(&dir, "r1", Some("correct horse")).unwrap();
+        let mut writer =
+            ContainerWriter::create(fs::File::create(&target.path).unwrap(), &target.key).unwrap();
+        writer.write_chunk(br#"{"manifest":true}"#).unwrap();
+        writer.write_chunk(br#"{"media":[{"archived_bytes":3,"chunks":1}]}"#).unwrap();
+        writer.write_chunk(b"abc").unwrap();
+        writer.write_chunk(br#"{"media":[{"archived_bytes":3,"chunks":1}]}"#).unwrap();
+        drop(writer);
+
+        let verified = verify_backup(&dir, "r1", Some("correct horse")).unwrap();
+        assert!(verified.ok);
+        assert!(!verified.complete);
+        assert_eq!(verified.items, 2);
+        assert_eq!(verified.media_files, 1);
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn files_left_waiting_for_a_backup_are_gone_after_a_restart() {
+        let dir = test_dir("downloads");
+        let downloads = dir.join("downloads");
+        let tdlib_files = dir.join("files");
+        fs::create_dir_all(tdlib_files.join("photos")).unwrap();
+        fs::write(tdlib_files.join("photos").join("1.jpg"), b"plain").unwrap();
+
+        empty_download_dirs(&[downloads.clone(), tdlib_files.clone()]).unwrap();
+
+        assert_eq!(fs::read_dir(&downloads).unwrap().count(), 0);
+        assert_eq!(fs::read_dir(&tdlib_files).unwrap().count(), 0);
 
         fs::remove_dir_all(dir).ok();
     }

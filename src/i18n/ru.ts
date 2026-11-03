@@ -239,6 +239,7 @@ export const ru = {
   "receipt.backupUnchecked": "Ещё не проверена",
   "receipt.backupOk": "Проверена. Записей: {{items, number}}, файлов: {{files, number}}",
   "receipt.backupBad": "Проверка не прошла",
+  "receipt.backupCutOff": "Копия обрывается, до обрыва она цела. Записей: {{items, number}}, файлов: {{files, number}}. Того, что шло дальше, в ней нет",
   "receipt.signature": "Подпись",
   "receipt.copySignature": "Скопировать подпись",
   "receipt.signed": "Подписано на этом устройстве",

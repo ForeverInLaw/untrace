@@ -618,7 +618,7 @@ async fn set_tdlib_parameters(
 ) -> Result<(), CommandError> {
     std::fs::create_dir_all(&state.root_dir)?;
     let database_dir = state.root_dir.join("db");
-    let files_dir = state.root_dir.join("files");
+    let files_dir = state.root_dir.join(super::FILES_DIR);
     std::fs::create_dir_all(&database_dir)?;
     std::fs::create_dir_all(&files_dir)?;
     let db_key = hex_encode(&keychain_data_key(
