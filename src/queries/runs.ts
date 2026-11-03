@@ -5,6 +5,7 @@ import {
   useMutation,
   useMutationState,
   useQuery,
+  type InfiniteData,
   type MutationState,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -14,6 +15,7 @@ import {
   type ConnectAccountRequest,
   type ContentType,
   type ItemGroup,
+  type PreviewItem,
   type ProgressEvent,
   type RunConsent,
   type StartRunRequest,
@@ -89,12 +91,21 @@ export function useRunScopeResultsQuery(runId: string, enabled: boolean) {
   });
 }
 
-export function usePreviewItemsQuery(runId: string, group: ItemGroup, contentType: ContentType | null) {
+/// Keeps the rows on screen while a new search loads, so typing does not blank the
+/// table. A new chip starts empty: rows of another chip would be wrong under it.
+export function usePreviewItemsQuery(
+  runId: string,
+  group: ItemGroup,
+  contentType: ContentType | null,
+  search: string,
+) {
   return useInfiniteQuery({
-    queryKey: ["preview", runId, "items", group, contentType],
+    queryKey: ["preview", runId, "items", group, contentType, search],
     initialPageParam: 0,
+    placeholderData: (previous: InfiniteData<PreviewItem[], number> | undefined, previousQuery) =>
+      previousQuery?.queryKey[3] === group && previousQuery.queryKey[4] === contentType ? previous : undefined,
     queryFn: ({ pageParam }) =>
-      api.previewItems({ runId, group, contentType, offset: pageParam, limit: PREVIEW_PAGE_SIZE }),
+      api.previewItems({ runId, group, contentType, search, offset: pageParam, limit: PREVIEW_PAGE_SIZE }),
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === PREVIEW_PAGE_SIZE ? pages.length * PREVIEW_PAGE_SIZE : undefined,
   });

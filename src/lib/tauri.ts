@@ -242,6 +242,8 @@ export interface PreviewItemsRequest {
   runId: string;
   group: ItemGroup;
   contentType: ContentType | null;
+  /// Text the rows must contain; blank lists them all.
+  search: string;
   offset: number;
   limit: number;
 }
