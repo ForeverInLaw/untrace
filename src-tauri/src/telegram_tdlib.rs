@@ -593,9 +593,10 @@ pub async fn telegram_start_run(
     // Reuse the authenticated TDLib client. Phase 2 reads pending rows from the
     // store, so the execute adapter needs only the client + whose messages they are.
     let (_auth, client, current_user_id) = state.ready_context().await?;
-    let adapter: Arc<dyn PlatformAdapter> = Arc::new(
-        snapshot::TelegramSnapshotAdapter::for_execute(client, current_user_id, state.connection()),
-    );
+    let connection = state.connection();
+    let adapter = move |control| -> Arc<dyn PlatformAdapter> {
+        Arc::new(snapshot::TelegramSnapshotAdapter::for_execute(client, current_user_id, connection, control))
+    };
 
     crate::execute_previewed_run(
         &app,

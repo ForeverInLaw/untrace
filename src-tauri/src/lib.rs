@@ -320,7 +320,7 @@ async fn start_run(
 
     execute_previewed_run(
         &state,
-        adapter,
+        |_| adapter,
         run_id,
         pending,
         backup_passphrase,
@@ -388,9 +388,11 @@ fn claim_run_slot(
 /// receipt + controls and fire the run on its own thread. The authed adapter is
 /// the only platform-specific input, so a new platform's start command just
 /// builds its adapter and calls this.
+/// Runs a previewed run. `adapter` is handed the run's control, to call off work in
+/// progress on a stop.
 pub(crate) async fn execute_previewed_run(
     state: &AppState,
-    adapter: Arc<dyn PlatformAdapter>,
+    adapter: impl FnOnce(RunControl) -> Arc<dyn PlatformAdapter>,
     run_id: String,
     pending: PendingRun,
     backup_passphrase: Option<String>,
@@ -400,6 +402,7 @@ pub(crate) async fn execute_previewed_run(
     // Claimed first, so a second start of a live run is refused before it writes a
     // key over the one the running backup needs. Given back if the run cannot start.
     let control = RunControl::new();
+    let adapter = adapter(control.clone());
     claim_run_slot(&mut *state.controls.lock().await, &run_id, control.clone())?;
     let prepared = async {
         // Checked before the backup target, which writes key files for the run.
