@@ -242,6 +242,7 @@ pub async fn snapshot_items_for_chats(
                         TelegramMessageKind::Media => ContentType::Media,
                         TelegramMessageKind::Text | TelegramMessageKind::Other => ContentType::Dm,
                     },
+                    subtype: message.subtype,
                     created_at: time::OffsetDateTime::from_unix_timestamp(
                         message.sent_at_epoch_secs as i64,
                     )

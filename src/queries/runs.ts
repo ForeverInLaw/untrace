@@ -22,6 +22,7 @@ import {
   type BackupRequest,
   type ExportOutcome,
 } from "../lib/tauri";
+import { useSubtypesNamedBy } from "../lib/itemText";
 import { useExportStore } from "../stores/exportStore";
 import { selectRunLive, useRunStore } from "../stores/runStore";
 import { OWN_COUNTS_KEY, useSessionRefresh } from "./telegram";
@@ -94,19 +95,29 @@ export function useRunScopeResultsQuery(runId: string, enabled: boolean) {
 
 /// Keeps the rows on screen while a new search loads, so typing does not blank the
 /// table. A new chip starts empty: rows of another chip would be wrong under it.
+/// A search finds rows by their text and by what they are, in the interface language.
 export function usePreviewItemsQuery(
   runId: string,
   group: ItemGroup,
   contentType: ContentType | null,
   search: string,
 ) {
+  const matchingSubtypes = useSubtypesNamedBy(search);
   return useInfiniteQuery({
-    queryKey: ["preview", runId, "items", group, contentType, search],
+    queryKey: ["preview", runId, "items", group, contentType, search, matchingSubtypes],
     initialPageParam: 0,
     placeholderData: (previous: InfiniteData<PreviewItem[], number> | undefined, previousQuery) =>
       previousQuery?.queryKey[3] === group && previousQuery.queryKey[4] === contentType ? previous : undefined,
     queryFn: ({ pageParam }) =>
-      api.previewItems({ runId, group, contentType, search, offset: pageParam, limit: PREVIEW_PAGE_SIZE }),
+      api.previewItems({
+        runId,
+        group,
+        contentType,
+        search,
+        matchingSubtypes,
+        offset: pageParam,
+        limit: PREVIEW_PAGE_SIZE,
+      }),
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === PREVIEW_PAGE_SIZE ? pages.length * PREVIEW_PAGE_SIZE : undefined,
   });

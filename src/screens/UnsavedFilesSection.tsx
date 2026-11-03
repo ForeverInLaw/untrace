@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button, CheckboxLabel, Notice } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
+import { useItemText } from "../lib/itemText";
 import { useRetryUnsavedFilesMutation, useUnsavedFilesQuery } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { selectRunLive, useRunStore } from "../stores/runStore";
@@ -19,6 +20,7 @@ interface UnsavedFilesSectionProps {
 export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFilesSectionProps) {
   const { t } = useTranslation();
   const format = useDateFormat();
+  const itemText = useItemText();
   const flowPassphrase = useFlowStore((s) => s.passphrase);
   const retryStarted = useFlowStore((s) => s.retryStarted);
   const running = useRunStore(selectRunLive);
@@ -60,7 +62,7 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
           <tbody>
             {unsaved.items.map((item) => (
               <tr key={item.platform_id}>
-                <td><div className="cell-line"><span className="cell-line__text">{item.text ?? t("preview.noText")}</span></div></td>
+                <td><div className="cell-line"><span className="cell-line__text">{itemText(item)}</span></div></td>
                 <td className="unsaved__why">{t(`unsaved.failure.${item.failure}`)}</td>
                 <td className="cell-date">{item.created_at_secs === null ? "—" : format.day(item.created_at_secs)}</td>
               </tr>

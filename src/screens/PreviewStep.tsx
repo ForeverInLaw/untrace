@@ -5,6 +5,7 @@ import { useDebounce } from "use-debounce";
 import { Button, Checkbox, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
+import { useItemText } from "../lib/itemText";
 import type { ContentType, ItemGroup, PreviewItem, PreviewSummary } from "../lib/tauri";
 import {
   useIsSavingProtection,
@@ -27,11 +28,12 @@ const ALL: Filter = { group: "all", type: null };
 function ItemCells({ item, hint }: { item: PreviewItem; hint?: ReactNode }) {
   const { t } = useTranslation();
   const format = useDateFormat();
+  const itemText = useItemText();
   return (
     <>
-      <td title={item.text ?? undefined}>
+      <td title={itemText(item)}>
         <div className="cell-line">
-          <span className="cell-line__text">{item.text ?? t("preview.noText")}</span>
+          <span className="cell-line__text">{itemText(item)}</span>
           {hint}
         </div>
       </td>
