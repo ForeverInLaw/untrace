@@ -23,7 +23,7 @@ import {
   type ExportOutcome,
 } from "../lib/tauri";
 import { useExportStore } from "../stores/exportStore";
-import { useRunStore } from "../stores/runStore";
+import { selectRunLive, useRunStore } from "../stores/runStore";
 import { OWN_COUNTS_KEY, useSessionRefresh } from "./telegram";
 
 const PREVIEW_PAGE_SIZE = 100;
@@ -172,9 +172,8 @@ export function useStartRunMutation(platformId: string) {
     mutationKey: ["runs", "start"],
     mutationFn: (req: StartRunRequest) =>
       platformId === "telegram" ? api.telegramStartRun(req, handleEvent) : api.startRun(req, handleEvent),
-    // Before the call, so its first events already belong to it.
-    onMutate: (req) => setRunId(req.runId),
-    onError: () => setRunId(null),
+    // Only once the engine took it: a start it refused must not unseat the run it kept.
+    onSuccess: (_started, req) => setRunId(req.runId),
     // Even a stopped run may have deleted some messages.
     onSettled: () =>
       platformId === "telegram" ? queryClient.invalidateQueries({ queryKey: OWN_COUNTS_KEY }) : undefined,
@@ -200,8 +199,10 @@ export function useRetryUnsavedFilesMutation(platformId: string) {
     mutationKey: ["runs", "retry-unsaved"],
     mutationFn: async ({ runId, backupPassphrase, allowLostFiles }: RetryUnsavedFiles) => {
       const { run_id: retryId } = await api.retryUnsavedFiles(runId);
-      // The engine accepted it, so whatever the store showed before is over.
-      resetRun();
+      // What the store showed is over, unless a run started meanwhile; then this start is refused.
+      if (!selectRunLive(useRunStore.getState())) {
+        resetRun();
+      }
       try {
         await start.mutateAsync({
           runId: retryId,

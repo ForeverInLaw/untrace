@@ -25,7 +25,7 @@ interface RunState {
   paused: boolean;
   status: RunStatus;
   failure: CommandError | null;
-  /// The run these numbers describe, from its start; null for a preview.
+  /// The run these numbers describe, once the engine has started it; null for a preview.
   runId: string | null;
   apply: (e: RunEvent) => void;
   setRunId: (runId: string | null) => void;
