@@ -97,12 +97,17 @@ pub fn backup_path(base_dir: &Path, run_id: &str) -> PathBuf {
     base_dir.join(format!("untrace-backup-{run_id}.bin"))
 }
 
+/// Refuses a run that already has a backup before it writes any key, because a new
+/// passphrase key would replace the one that backup needs.
 pub fn backup_target(
     base_dir: &Path,
     run_id: &str,
     backup_passphrase: Option<&str>,
 ) -> Result<BackupTarget, CommandError> {
     let path = backup_path(base_dir, run_id);
+    if path.try_exists()? {
+        return Err(CommandError::msg("this run already has a backup"));
+    }
     let key = match backup_passphrase {
         Some(passphrase) => passphrase_backup_key(&path, passphrase)?,
         None => backup_data_key()?,
@@ -483,6 +488,18 @@ mod tests {
         assert_eq!(ok.items, 1);
         assert_eq!(ok.media_files, 1);
         assert!(verify_backup(&dir, "r1", Some("wrong horse")).is_err());
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_run_with_a_backup_already_cannot_replace_its_key() {
+        let dir = test_dir("backup-again");
+        write_backup(&dir, "correct horse");
+
+        let refused = backup_target(&dir, "r1", Some("other horse")).err().unwrap();
+        assert_eq!(refused.message, "this run already has a backup");
+        assert!(verify_backup(&dir, "r1", Some("correct horse")).unwrap().complete);
 
         fs::remove_dir_all(dir).ok();
     }
