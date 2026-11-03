@@ -133,7 +133,8 @@ export function useTelegramOwnMessageCounts(account: string, chats: TelegramChat
       const counts: OwnMessageCounts = {};
       results.forEach((result, index) => {
         const count = result.isError || !result.isEnabled ? null : result.data;
-        if (count !== undefined) counts[chats[index].id] = count;
+        // An earlier count shown while the chat is recounted is no longer exact.
+        if (count !== undefined) counts[chats[index].id] = count && result.isPlaceholderData ? { ...count, exact: false } : count;
       });
       return { counts, uncounted: results.filter((result) => result.isFetching).length };
     },
