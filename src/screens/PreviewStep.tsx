@@ -31,7 +31,7 @@ function ItemCells({ item, hint }: { item: PreviewItem; hint?: ReactNode }) {
   const format = useDateFormat();
   const formatBytes = useByteFormat();
   const itemText = useItemText();
-  const type = t(`contentTypeOne.${item.content_type}`);
+  const typeLabel = t(`contentTypeOne.${item.content_type}`);
   return (
     <>
       <td title={itemText(item)}>
@@ -41,7 +41,9 @@ function ItemCells({ item, hint }: { item: PreviewItem; hint?: ReactNode }) {
         </div>
       </td>
       <td className="cell-meta">
-        {item.file_size === null ? type : t("preview.typeWithSize", { type, size: formatBytes(item.file_size) })}
+        {item.file_size === null
+          ? typeLabel
+          : t("preview.typeWithSize", { type: typeLabel, size: formatBytes(item.file_size) })}
       </td>
       <td className="cell-date">{item.created_at_secs === null ? "—" : format.day(item.created_at_secs)}</td>
     </>
