@@ -54,7 +54,6 @@ pub async fn telegram_dry_run_chats(
         account_label: auth.account_label.unwrap_or_else(|| "Telegram".into()),
         plan: run_filters::plan_from_filter(&filter),
         filter: filter.clone(),
-        backup: true,
         allow_incomplete_backup: false,
         allow_lost_files: false,
         allow_only_for_self: false,
