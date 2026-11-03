@@ -4,6 +4,8 @@ import { ITEM_SUBTYPES, isItemSubtype, type ItemSubtype } from "./tauri";
 interface Described {
   subtype: string | null;
   text: string | null;
+  /// Stands in for missing text, as Telegram's chat list does.
+  file_name?: string | null;
 }
 
 /// Close enough to the store's search folding for the short subtype labels.
@@ -11,11 +13,12 @@ function fold(text: string) {
   return text.normalize("NFC").toLowerCase().replaceAll("ё", "е");
 }
 
-/// Words a row the way Telegram does: what it is, then its own text ("Poll: tea or
-/// coffee"). Plain text shows as it is.
+/// Words a row the way Telegram does: what it is, then its own text or else its
+/// file's name ("Poll: tea or coffee", "File: report.pdf"). Plain text shows as it is.
 export function useItemText() {
   const { t } = useTranslation();
-  return ({ subtype, text }: Described) => {
+  return ({ subtype, text: ownText, file_name }: Described) => {
+    const text = ownText ?? file_name;
     if (!subtype) {
       return text ?? t("preview.noText");
     }

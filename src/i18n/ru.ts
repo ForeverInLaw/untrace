@@ -127,6 +127,7 @@ export const ru = {
   "preview.protectFailed": "Не сохранилось",
   "preview.noText": "Без текста",
   "preview.subtypeWithText": "{{subtype}}: {{text}}",
+  "preview.typeWithSize": "{{type}} · {{size}}",
   "preview.toggleRow": "Удалить эту запись",
   "table.more": "Показать ещё",
   "preview.empty": "Под условия ничего не попало, удалять нечего.",

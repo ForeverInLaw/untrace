@@ -5,7 +5,7 @@ import { useDebounce } from "use-debounce";
 import { MoreRows } from "../components/MoreRows";
 import { Button, Checkbox, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
-import { useDateFormat } from "../lib/format";
+import { useByteFormat, useDateFormat } from "../lib/format";
 import { useItemText } from "../lib/itemText";
 import type { ContentType, ItemGroup, PreviewItem, PreviewSummary } from "../lib/tauri";
 import {
@@ -25,11 +25,13 @@ type Filter = { group: ItemGroup; type: ContentType | null };
 
 const ALL: Filter = { group: "all", type: null };
 
-/// Text, type and date of a row, with an optional hint laid over the text's end.
+/// Text, type with file size and date of a row, with an optional hint laid over the text's end.
 function ItemCells({ item, hint }: { item: PreviewItem; hint?: ReactNode }) {
   const { t } = useTranslation();
   const format = useDateFormat();
+  const formatBytes = useByteFormat();
   const itemText = useItemText();
+  const type = t(`contentTypeOne.${item.content_type}`);
   return (
     <>
       <td title={itemText(item)}>
@@ -38,7 +40,9 @@ function ItemCells({ item, hint }: { item: PreviewItem; hint?: ReactNode }) {
           {hint}
         </div>
       </td>
-      <td className="cell-meta">{t(`contentTypeOne.${item.content_type}`)}</td>
+      <td className="cell-meta">
+        {item.file_size === null ? type : t("preview.typeWithSize", { type, size: formatBytes(item.file_size) })}
+      </td>
       <td className="cell-date">{item.created_at_secs === null ? "—" : format.day(item.created_at_secs)}</td>
     </>
   );

@@ -45,6 +45,8 @@ pub struct PreviewItem {
     subtype: Option<String>,
     created_at_secs: Option<i64>,
     text: Option<String>,
+    file_name: Option<String>,
+    file_size: Option<u64>,
     /// `pending`, `protected` or `undeletable`.
     state: &'static str,
     only_for_self: bool,
@@ -168,6 +170,8 @@ pub async fn preview_items(
             subtype: row.subtype,
             created_at_secs: row.created_at_secs,
             text: row.text,
+            file_name: row.file_name,
+            file_size: row.file_size,
             state: row.state.as_str(),
             only_for_self: row.only_for_self,
         })

@@ -1013,7 +1013,7 @@ small {
 }
 
 .table .cell-meta {
-  width: 130px;
+  width: 150px;
   padding-left: 16px;
   color: var(--soot);
   font-size: 13px;
@@ -1294,7 +1294,7 @@ small {
   }
 
   .table .cell-meta {
-    width: 104px;
+    width: 120px;
   }
 
   .table .cell-date {
