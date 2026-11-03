@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ProgressEvent } from "../lib/tauri";
+import type { CommandError, RunEvent } from "../lib/tauri";
 
 export type RunStatus =
   | "idle"
@@ -24,8 +24,8 @@ interface RunState {
   offline: boolean;
   paused: boolean;
   status: RunStatus;
-  message: string | null;
-  apply: (e: ProgressEvent) => void;
+  failure: CommandError | null;
+  apply: (e: RunEvent) => void;
   setPaused: (paused: boolean) => void;
   reset: () => void;
 }
@@ -43,7 +43,7 @@ const initial = {
   offline: false,
   paused: false,
   status: "idle" as RunStatus,
-  message: null,
+  failure: null,
 };
 
 /// Live, ephemeral run telemetry. Components MUST read via selectors.
@@ -69,7 +69,7 @@ export const useRunStore = create<RunState>((set) => ({
         case "done":
           return { status: "done", throttleWaitSecs: null, offline: false };
         case "error":
-          return { status: "error", message: e.data.message, throttleWaitSecs: null, offline: false };
+          return { status: "error", failure: e.data, throttleWaitSecs: null, offline: false };
       }
     }),
   setPaused: (paused) => set({ paused }),

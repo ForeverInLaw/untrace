@@ -262,10 +262,10 @@ pub async fn disconnect_account(
     if platform != TELEGRAM {
         return session::remove(&state.session_dir, &platform, &label);
     }
-    if !state.controls.lock().await.is_empty() {
-        return Err(CommandError::msg(
-            "Wait for the cleanup to finish before signing out of Telegram",
-        ));
+    // Held through the sign-out, so no cleanup can start on a session that is ending.
+    let controls = state.controls.lock().await;
+    if !controls.is_empty() {
+        return Err(CommandError::another_run_is_live());
     }
     telegram.log_out().await
 }

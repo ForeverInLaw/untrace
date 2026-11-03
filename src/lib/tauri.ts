@@ -1,7 +1,33 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 
-/// Mirrors lethe_core::ProgressEvent (serde tag="event", snake_case).
-export type ProgressEvent =
+/// Mirrors the shell's CommandError: a code the interface words in the person's
+/// language, the details that sentence needs, and the backend's own text.
+export type CommandError = { message: string } & (
+  | { code: "rate_limited"; wait_secs: number }
+  | {
+      code:
+        | "unknown"
+        | "offline"
+        | "sign_in_rejected"
+        | "session_expired"
+        | "run_stopped"
+        | "another_run_is_live"
+        | "no_disk_space"
+        | "wrong_passphrase"
+        | "backup_write_failed"
+        | "keychain_unavailable"
+        | "telegram_not_connected"
+        | "telegram_code_invalid"
+        | "telegram_code_expired"
+        | "telegram_password_invalid"
+        | "telegram_phone_invalid"
+        | "telegram_api_key_invalid";
+    }
+);
+
+/// Mirrors the shell's RunEvent: lethe_core::ProgressEvent (serde tag="event",
+/// snake_case), then the run's failure if it ended without a receipt.
+export type RunEvent =
   | { event: "enumerating"; data: { seen: number } }
   | { event: "preview_ready"; data: { pending: number; protected: number } }
   | { event: "archiving"; data: { done_bytes: number; total_bytes: number } }
@@ -10,7 +36,7 @@ export type ProgressEvent =
   | { event: "offline" }
   | { event: "online" }
   | { event: "done"; data: { run_id: string } }
-  | { event: "error"; data: { message: string } };
+  | { event: "error"; data: CommandError };
 
 export interface PreviewCounts {
   pending: number;
@@ -60,7 +86,7 @@ export type TelegramAuthPhase =
 
 export interface TelegramAuthStatus {
   phase: TelegramAuthPhase;
-  message: string;
+  error: CommandError | null;
   account_label: string | null;
   confirmation_link: string | null;
 }
@@ -79,7 +105,7 @@ export interface TelegramDryRunRequest {
 
 export interface TelegramScopeStatus {
   available: boolean;
-  blocker: string;
+  blocker: CommandError | null;
   auth: TelegramAuthStatus;
   chats: TelegramChatSummary[];
 }
@@ -294,8 +320,8 @@ export const api = {
     invoke<DryRunResult>("telegram_dry_run_chats", { req }),
 
   /// Phase 2 for a previewed Telegram run; same progress channel as startRun.
-  telegramStartRun: (req: StartRunRequest, onEvent: (e: ProgressEvent) => void) => {
-    const channel = new Channel<ProgressEvent>();
+  telegramStartRun: (req: StartRunRequest, onEvent: (e: RunEvent) => void) => {
+    const channel = new Channel<RunEvent>();
     channel.onmessage = onEvent;
     return invoke<void>("telegram_start_run", {
       runId: req.runId,
@@ -315,8 +341,8 @@ export const api = {
   dryRun: (req: BuildRunRequest) => invoke<DryRunResult>("dry_run", { req }),
 
   /// Streams progress over a Tauri Channel; the run lives in the core.
-  startRun: (req: StartRunRequest, onEvent: (e: ProgressEvent) => void) => {
-    const channel = new Channel<ProgressEvent>();
+  startRun: (req: StartRunRequest, onEvent: (e: RunEvent) => void) => {
+    const channel = new Channel<RunEvent>();
     channel.onmessage = onEvent;
     return invoke<void>("start_run", {
       runId: req.runId,

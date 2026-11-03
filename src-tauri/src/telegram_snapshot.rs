@@ -58,9 +58,7 @@ pub async fn telegram_dry_run_chats(
         .collect::<Result<Vec<_>, _>>()?;
     let filter = run_filters::to_filter_spec(&req.filter)?;
     let filter_json = serde_json::to_string(&req.filter)?;
-    let adapter = snapshot_items_for_chats(client, current_user_id, &chat_ids, state.connection())
-        .await
-        .map_err(|e| CommandError::msg(e.to_string()))?;
+    let adapter = snapshot_items_for_chats(client, current_user_id, &chat_ids, state.connection()).await?;
     let run_id = format!("telegram-{}", now_secs());
 
     let run_req = RunRequest {

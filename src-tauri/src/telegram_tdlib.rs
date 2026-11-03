@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use lethe_adapter::PlatformAdapter;
-use lethe_core::ProgressEvent;
 use lethe_telegram::tdlib_bridge::{
     list_chat_scopes, search_own_messages, OwnMessagePage, TdlibClientId, TelegramChatKind,
 };
@@ -20,7 +19,7 @@ use crate::telegram::{
     TelegramAuthStartRequest, TelegramAuthStatus, TelegramChatSummary, TelegramDryRunRequest,
     TelegramScopeKind, TelegramScopeStatus,
 };
-use crate::{AppState, CommandError, DryRunResult};
+use crate::{AppState, CommandError, DryRunResult, ErrorKind};
 
 #[path = "telegram_snapshot.rs"]
 mod snapshot;
@@ -31,7 +30,6 @@ mod api_key;
 use api_key::{ApiKey, ApiKeyKeeper, KeychainVault};
 
 const AUTH_WAIT: Duration = Duration::from_secs(20);
-const STARTING_MESSAGE: &str = "Starting Telegram TDLib client.";
 
 pub struct TelegramState {
     root_dir: PathBuf,
@@ -44,7 +42,7 @@ pub struct TelegramState {
     /// Set once the saved session has had its chance to reconnect.
     resumed: OnceCell<()>,
     /// Why the saved session did not reconnect; cleared by the next sign-in attempt.
-    resume_failure: Mutex<Option<String>>,
+    resume_failure: Mutex<Option<CommandError>>,
     /// Held for a whole sign-out, so two of them never race on one client.
     signing_out: Mutex<()>,
 }
@@ -149,9 +147,10 @@ impl TelegramState {
         self.resumed
             .get_or_init(|| async {
                 if let Err(error) = self.resume().await {
-                    *self.resume_failure.lock().await = Some(format!(
-                        "Could not reconnect the saved Telegram session: {}",
-                        error.message
+                    // Its own cause, such as a locked keychain; nothing says the session expired.
+                    *self.resume_failure.lock().await = Some(CommandError::new(
+                        error.kind,
+                        format!("Could not reconnect the saved Telegram session: {}", error.message()),
                     ));
                 }
             })
@@ -174,7 +173,7 @@ impl TelegramState {
             .lock()
             .await
             .client
-            .ok_or_else(|| CommandError::msg("Telegram is not connected yet"))
+            .ok_or_else(not_connected)
     }
 
     async fn current_status(&self) -> TelegramAuthStatus {
@@ -231,13 +230,13 @@ impl TelegramState {
     ) -> Result<(TelegramAuthStatus, TdlibClientId, i64), CommandError> {
         let auth = self.known_status().await?;
         if !matches!(auth.phase, TelegramAuthPhase::Ready) {
-            return Err(CommandError::msg("Telegram is not authenticated"));
+            return Err(not_connected());
         }
 
         let inner = self.inner.lock().await;
         let client = inner
             .client
-            .ok_or_else(|| CommandError::msg("Telegram client is not initialized"))?;
+            .ok_or_else(not_connected)?;
         let current_user_id = inner
             .current_user_id
             .ok_or_else(|| CommandError::msg("Telegram user id is not loaded"))?;
@@ -295,7 +294,8 @@ impl TelegramState {
             // Nothing is signed in yet, so there is no session to end on the server.
             enums::AuthorizationState::WaitTdlibParameters => functions::close(client.raw()).await,
             enums::AuthorizationState::Ready if !*self.online.borrow() => {
-                return Err(CommandError::msg(
+                return Err(CommandError::new(
+                    ErrorKind::Offline,
                     "Telegram is unreachable. Sign out again once the connection is back.",
                 ));
             }
@@ -350,10 +350,10 @@ impl TelegramState {
     }
 
     async fn wait_for_auth_update(&self, client: TdlibClientId) -> TelegramAuthStatus {
-        self.wait_until(client, |status| status.message != STARTING_MESSAGE)
+        self.wait_until(client, |status| !matches!(status.phase, TelegramAuthPhase::Starting))
             .await
             .unwrap_or_else(|| {
-                error_status("Timed out waiting for TDLib authorization state.".into())
+                error_status(CommandError::msg("Timed out waiting for TDLib authorization state."))
             })
     }
 
@@ -420,7 +420,7 @@ pub async fn telegram_scope_status(
     if !matches!(auth.phase, TelegramAuthPhase::Ready) {
         return Ok(TelegramScopeStatus {
             available: false,
-            blocker: auth.message.clone(),
+            blocker: Some(auth.error.clone().unwrap_or_else(not_connected)),
             auth,
             chats: Vec::new(),
         });
@@ -429,22 +429,21 @@ pub async fn telegram_scope_status(
     let Some(client) = client else {
         return Ok(TelegramScopeStatus {
             available: false,
-            blocker: "Telegram client is not initialized.".into(),
+            blocker: Some(not_connected()),
             auth,
             chats: Vec::new(),
         });
     };
 
     let chats = list_chat_scopes(client)
-        .await
-        .map_err(|e| CommandError::msg(e.to_string()))?
+        .await?
         .into_iter()
         .map(TelegramChatSummary::from)
         .collect();
 
     Ok(TelegramScopeStatus {
         available: true,
-        blocker: String::new(),
+        blocker: None,
         auth,
         chats,
     })
@@ -547,9 +546,7 @@ pub async fn telegram_own_message_count(
     chat_id: String,
 ) -> Result<usize, CommandError> {
     let (_auth, client, current_user_id) = state.ready_context().await?;
-    let page = own_message_page(client, parse_chat_id(&chat_id)?, current_user_id, 0, 1)
-        .await
-        .map_err(|e| CommandError::msg(e.to_string()))?;
+    let page = own_message_page(client, parse_chat_id(&chat_id)?, current_user_id, 0, 1).await?;
     Ok(usize::try_from(page.total_count)
         .unwrap_or(0)
         .max(page.messages.len()))
@@ -574,7 +571,7 @@ pub async fn telegram_start_run(
     run_id: String,
     backup_passphrase: Option<String>,
     consent: crate::RunConsent,
-    on_event: Channel<ProgressEvent>,
+    on_event: Channel<crate::RunEvent>,
 ) -> Result<(), CommandError> {
     let pending = app
         .pending
@@ -674,76 +671,71 @@ fn status_from_authorization(state: enums::AuthorizationState) -> TelegramAuthSt
     match state {
         enums::AuthorizationState::WaitTdlibParameters => TelegramAuthStatus {
             phase: TelegramAuthPhase::WaitParameters,
-            message: "TDLib is waiting for initialization parameters.".into(),
+            error: None,
             account_label: None,
             confirmation_link: None,
         },
         enums::AuthorizationState::WaitPhoneNumber => TelegramAuthStatus {
             phase: TelegramAuthPhase::WaitPhoneNumber,
-            message: "TDLib is ready for the phone number.".into(),
+            error: None,
             account_label: None,
             confirmation_link: None,
         },
         enums::AuthorizationState::WaitCode(_) => TelegramAuthStatus {
             phase: TelegramAuthPhase::WaitCode,
-            message: "Enter the Telegram login code.".into(),
+            error: None,
             account_label: None,
             confirmation_link: None,
         },
         enums::AuthorizationState::WaitPassword(_) => TelegramAuthStatus {
             phase: TelegramAuthPhase::WaitPassword,
-            message: "Enter the Telegram two-step verification password.".into(),
+            error: None,
             account_label: None,
             confirmation_link: None,
         },
         enums::AuthorizationState::WaitOtherDeviceConfirmation(data) => TelegramAuthStatus {
             phase: TelegramAuthPhase::WaitOtherDeviceConfirmation,
-            message: "Confirm this login from another Telegram session.".into(),
+            error: None,
             account_label: None,
             confirmation_link: Some(data.link),
         },
         enums::AuthorizationState::Ready => TelegramAuthStatus {
             phase: TelegramAuthPhase::Ready,
-            message: "Telegram is authenticated; chat discovery is available.".into(),
+            error: None,
             account_label: None,
             confirmation_link: None,
         },
         enums::AuthorizationState::LoggingOut | enums::AuthorizationState::Closing => {
             TelegramAuthStatus {
                 phase: TelegramAuthPhase::SigningOut,
-                message: "Signing out of Telegram.".into(),
+                error: None,
                 account_label: None,
                 confirmation_link: None,
             }
         }
         enums::AuthorizationState::Closed => TelegramAuthStatus {
             phase: TelegramAuthPhase::Closed,
-            message: "Telegram client is closed.".into(),
+            error: None,
             account_label: None,
             confirmation_link: None,
         },
-        other => TelegramAuthStatus {
-            phase: TelegramAuthPhase::Error,
-            message: format!("Unsupported Telegram auth state: {other:?}"),
-            account_label: None,
-            confirmation_link: None,
-        },
+        other => error_status(CommandError::msg(format!("Unsupported Telegram auth state: {other:?}"))),
     }
 }
 
 fn starting_status() -> TelegramAuthStatus {
     TelegramAuthStatus {
         phase: TelegramAuthPhase::Starting,
-        message: STARTING_MESSAGE.into(),
+        error: None,
         account_label: None,
         confirmation_link: None,
     }
 }
 
-fn error_status(message: String) -> TelegramAuthStatus {
+fn error_status(error: CommandError) -> TelegramAuthStatus {
     TelegramAuthStatus {
         phase: TelegramAuthPhase::Error,
-        message,
+        error: Some(error),
         account_label: None,
         confirmation_link: None,
     }
@@ -752,14 +744,19 @@ fn error_status(message: String) -> TelegramAuthStatus {
 fn idle_status() -> TelegramAuthStatus {
     TelegramAuthStatus {
         phase: TelegramAuthPhase::Idle,
-        message: "Connect Telegram to discover chats where your messages can be cleaned.".into(),
+        error: None,
         account_label: None,
         confirmation_link: None,
     }
 }
 
 fn map_tdlib_error(error: tdlib_rs::types::Error) -> CommandError {
-    CommandError::msg(format!("TDLib {}: {}", error.code, error.message))
+    CommandError::telegram(error.code, &error.message)
+}
+
+/// Telegram has no live, signed-in client to act with.
+fn not_connected() -> CommandError {
+    CommandError::new(ErrorKind::TelegramNotConnected, "Telegram is not signed in")
 }
 
 #[cfg(test)]

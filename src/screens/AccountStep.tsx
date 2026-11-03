@@ -167,8 +167,7 @@ function TelegramConnect() {
   const needsSecret = signingIn && !changingDetails;
   const pending = start.isPending || code.isPending || password.isPending || logOut.isPending;
   const failure =
-    errorMessage(start.error ?? code.error ?? password.error ?? logOut.error ?? status.error) ??
-    (phase === "error" ? auth?.message : null);
+    errorMessage(start.error ?? code.error ?? password.error ?? logOut.error ?? status.error ?? auth?.error);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

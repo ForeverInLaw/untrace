@@ -1,6 +1,6 @@
 //! Untrace Tauri shell. The core owns the run; these commands start/observe it.
-//! Live progress flows over a Tauri `Channel<ProgressEvent>` (reusing the
-//! engine's event type verbatim). Run state lives in the core + SQLite, so a
+//! Live progress flows over a Tauri `Channel<RunEvent>`: the engine's own events,
+//! then how the run ended if it did not finish. Run state lives in the core + SQLite, so a
 //! run survives UI navigation.
 //!
 //! Concurrency note: the run-state `Store` wraps a rusqlite `Connection`, which
@@ -34,7 +34,10 @@ use tauri::ipc::Channel;
 use tauri::{async_runtime, Manager, State};
 use tokio::sync::Mutex;
 
+pub use error::{CommandError, ErrorKind};
+
 mod backup;
+mod error;
 mod platform_registry;
 mod run_filters;
 mod run_reads;
@@ -48,7 +51,6 @@ const SESSION_DIR: &str = "sessions";
 const TELEGRAM_DIR: &str = "telegram";
 /// Where a Bluesky file waits, unencrypted, until the backup has it.
 const DOWNLOADS_DIR: &str = "downloads";
-const ANOTHER_RUN_IS_LIVE: &str = "another cleanup is still running";
 
 pub struct AppState {
     pub egress: Arc<lethe_net::Egress>,
@@ -76,21 +78,14 @@ pub struct PendingRun {
     filter: FilterSpec,
 }
 
-#[derive(Debug, Serialize)]
-pub struct CommandError {
-    message: String,
-}
-impl CommandError {
-    fn msg(m: impl Into<String>) -> Self {
-        Self { message: m.into() }
-    }
-}
-impl<E: std::fmt::Display> From<E> for CommandError {
-    fn from(e: E) -> Self {
-        Self {
-            message: e.to_string(),
-        }
-    }
+/// What a run tells the interface over its channel.
+#[derive(Serialize)]
+#[serde(tag = "event", content = "data", rename_all = "snake_case")]
+pub enum RunEvent {
+    /// The run stopped before its receipt; sent last.
+    Error(CommandError),
+    #[serde(untagged)]
+    Progress(ProgressEvent),
 }
 
 #[derive(Debug, Deserialize)]
@@ -201,7 +196,7 @@ fn open_app_store<R: tauri::Runtime>(
     fs::create_dir_all(&store_dir)?;
     let store_path = store_dir.join(STORE_FILE);
     let key = secrets::store_key_passphrase()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message))?;
+        .map_err(|e| io::Error::other(e.message().to_owned()))?;
     let path = store_path
         .to_str()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "store path is not UTF-8"))?;
@@ -230,7 +225,7 @@ async fn connect_account(
         identifier,
         app_password,
     };
-    let cred = auth.connect(&consent).await?;
+    let cred = auth.connect(&consent).await.map_err(CommandError::sign_in)?;
 
     session::save(
         &state.session_dir,
@@ -307,7 +302,7 @@ async fn start_run(
     run_id: String,
     backup_passphrase: Option<String>,
     consent: RunConsent,
-    on_event: Channel<ProgressEvent>,
+    on_event: Channel<RunEvent>,
 ) -> Result<(), CommandError> {
     let pending = state
         .pending
@@ -343,7 +338,7 @@ async fn retry_unsaved_files(
     run_id: String,
 ) -> Result<DryRunResult, CommandError> {
     if !state.controls.lock().await.is_empty() {
-        return Err(CommandError::msg(ANOTHER_RUN_IS_LIVE));
+        return Err(CommandError::another_run_is_live());
     }
     let retry_id = format!("retry-{}", now_secs());
     let retry = state
@@ -383,7 +378,7 @@ fn claim_run_slot(
     control: RunControl,
 ) -> Result<(), CommandError> {
     if !controls.is_empty() {
-        return Err(CommandError::msg(ANOTHER_RUN_IS_LIVE));
+        return Err(CommandError::another_run_is_live());
     }
     controls.insert(run_id.to_owned(), control);
     Ok(())
@@ -400,7 +395,7 @@ pub(crate) async fn execute_previewed_run(
     pending: PendingRun,
     backup_passphrase: Option<String>,
     consent: RunConsent,
-    on_event: Channel<ProgressEvent>,
+    on_event: Channel<RunEvent>,
 ) -> Result<(), CommandError> {
     // Claimed first, so a second start of a live run is refused before it writes a
     // key over the one the running backup needs. Given back if the run cannot start.
@@ -409,7 +404,7 @@ pub(crate) async fn execute_previewed_run(
     let prepared = async {
         // Checked before the backup target, which writes key files for the run.
         if !run_reads::backup_space_for(state, &run_id, consent).await?.fits {
-            return Err(CommandError::msg("not enough free disk space for the backup"));
+            return Err(CommandError::new(ErrorKind::NoDiskSpace, "not enough free disk space for the backup"));
         }
         // Load keys/backup target up front: never start deleting what we cannot seal.
         let signer = secrets::receipt_signer()?;
@@ -435,13 +430,6 @@ pub(crate) async fn execute_previewed_run(
     let (signer, backup, started) = prepared?;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<ProgressEvent>();
-    // Forward engine events to the frontend channel until the run drops `tx`.
-    async_runtime::spawn(async move {
-        while let Some(ev) = rx.recv().await {
-            let _ = on_event.send(ev);
-        }
-    });
-
     let store = state.store.clone();
     let controls = state.controls.clone();
     let scope_results = state.scope_results.clone();
@@ -458,9 +446,8 @@ pub(crate) async fn execute_previewed_run(
         allow_only_for_self: consent.allow_only_for_self,
     };
 
-    // Fire-and-forget on its own thread; the run outlives this command. The
-    // result receiver is dropped — the run reports via the progress channel.
-    let _run_rx = run_offthread(move || async move {
+    // On its own thread; the run outlives this command and reports over `on_event`.
+    let run = run_offthread(move || async move {
         let mut scheduler = Scheduler::new();
         let mut guard = store.lock().await;
 
@@ -487,16 +474,24 @@ pub(crate) async fn execute_previewed_run(
                 let summary = outcome.summary(&run_req, started, now_secs());
                 pipeline::store_receipt(&guard, &signer, &summary)
                     .err()
-                    .map(|e| e.to_string())
+                    .map(CommandError::from)
             }
-            Err(e) => Some(e.to_string()),
+            Err(e) => Some(CommandError::run_failure(e)),
         };
 
         drop(guard);
         controls.lock().await.remove(&run_req.run_id);
-        // After the removal, so whoever hears this can already see the run as interrupted.
-        if let Some(message) = failure {
-            let _ = tx.send(ProgressEvent::Error { message });
+        failure
+    });
+    // Engine events until the run drops `tx`, then how it ended. The run's slot is
+    // free by then, so whoever hears of a failure can already see the run as interrupted.
+    async_runtime::spawn(async move {
+        while let Some(ev) = rx.recv().await {
+            let _ = on_event.send(RunEvent::Progress(ev));
+        }
+        let failure = run.await.unwrap_or_else(|_| Some(CommandError::msg("the run ended unexpectedly")));
+        if let Some(failure) = failure {
+            let _ = on_event.send(RunEvent::Error(failure));
         }
     });
 
@@ -544,7 +539,10 @@ async fn export_backup(
                     .file()
                     .set_parent(&window)
                     .blocking_pick_folder();
-                Ok(folder.map(|folder| folder.into_path()).transpose()?)
+                folder
+                    .map(|folder| folder.into_path())
+                    .transpose()
+                    .map_err(|e| CommandError::msg(e.to_string()))
             },
             |progress| {
                 let _ = on_progress.send(progress);
@@ -706,6 +704,18 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_run_reports_progress_as_the_engine_words_it_and_its_failure_with_a_code() {
+        let progress = RunEvent::Progress(ProgressEvent::Offline);
+        let failure = RunEvent::Error(CommandError::run_failure(lethe_core::EngineError::Aborted));
+
+        assert_eq!(serde_json::to_value(progress).unwrap(), serde_json::json!({ "event": "offline" }));
+        assert_eq!(
+            serde_json::to_value(failure).unwrap(),
+            serde_json::json!({ "event": "error", "data": { "code": "run_stopped", "message": "aborted by user" } })
+        );
+    }
 
     #[test]
     fn a_second_run_is_refused_until_the_first_ends() {

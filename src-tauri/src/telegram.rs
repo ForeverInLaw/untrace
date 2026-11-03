@@ -1,15 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+use crate::CommandError;
+
 /// TDLib's files folder under the Telegram folder. A downloaded file sits there
 /// unencrypted until the backup has it and it is deleted.
 pub const FILES_DIR: &str = "files";
 
-#[cfg(not(any(
-    feature = "telegram-tdlib-docs",
-    feature = "telegram-tdlib-local",
-    feature = "telegram-tdlib-download"
-)))]
-use crate::CommandError;
 
 /// Built only with TDLib, which lists the chats.
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -52,7 +48,8 @@ pub enum TelegramAuthPhase {
 #[derive(Debug, Clone, Serialize)]
 pub struct TelegramAuthStatus {
     pub phase: TelegramAuthPhase,
-    pub message: String,
+    /// Why sign-in failed; set only in the `Error` phase.
+    pub error: Option<CommandError>,
     pub account_label: Option<String>,
     pub confirmation_link: Option<String>,
 }
@@ -69,7 +66,8 @@ pub struct TelegramChatSummary {
 #[derive(Debug, Clone, Serialize)]
 pub struct TelegramScopeStatus {
     pub available: bool,
-    pub blocker: String,
+    /// Why chats cannot be listed; `None` once they can.
+    pub blocker: Option<CommandError>,
     pub auth: TelegramAuthStatus,
     pub chats: Vec<TelegramChatSummary>,
 }
@@ -110,6 +108,8 @@ mod fallback {
 
     use super::*;
 
+    const TDLIB_DISABLED: &str = "Telegram TDLib is not enabled in this build";
+
     pub struct TelegramState;
 
     impl TelegramState {
@@ -122,9 +122,7 @@ mod fallback {
         }
 
         pub async fn log_out(&self) -> Result<(), CommandError> {
-            Err(CommandError::msg(
-                "Telegram TDLib is not enabled in this build",
-            ))
+            Err(CommandError::msg(TDLIB_DISABLED))
         }
     }
 
@@ -134,7 +132,7 @@ mod fallback {
     ) -> Result<TelegramScopeStatus, CommandError> {
         Ok(TelegramScopeStatus {
             available: false,
-            blocker: "Telegram TDLib is feature-gated. Run the Tauri shell with telegram-tdlib-local or telegram-tdlib-download to authenticate.".into(),
+            blocker: Some(CommandError::msg(TDLIB_DISABLED)),
             auth: disabled_status(),
             chats: Vec::new(),
         })
@@ -180,9 +178,7 @@ mod fallback {
         chat_id: String,
     ) -> Result<usize, CommandError> {
         let _ = chat_id;
-        Err(CommandError::msg(
-            "Telegram TDLib is not enabled in this build",
-        ))
+        Err(CommandError::msg(TDLIB_DISABLED))
     }
 
     #[tauri::command]
@@ -192,9 +188,7 @@ mod fallback {
         req: TelegramDryRunRequest,
     ) -> Result<crate::DryRunResult, CommandError> {
         let _ = (&req.chat_ids, &req.filter);
-        Err(CommandError::msg(
-            "Telegram TDLib is not enabled in this build",
-        ))
+        Err(CommandError::msg(TDLIB_DISABLED))
     }
 
     #[tauri::command]
@@ -204,18 +198,16 @@ mod fallback {
         run_id: String,
         _backup_passphrase: Option<String>,
         _consent: crate::RunConsent,
-        _on_event: tauri::ipc::Channel<lethe_core::ProgressEvent>,
+        _on_event: tauri::ipc::Channel<crate::RunEvent>,
     ) -> Result<(), CommandError> {
         let _ = run_id;
-        Err(CommandError::msg(
-            "Telegram TDLib is not enabled in this build",
-        ))
+        Err(CommandError::msg(TDLIB_DISABLED))
     }
 
     fn disabled_status() -> TelegramAuthStatus {
         TelegramAuthStatus {
             phase: TelegramAuthPhase::Disabled,
-            message: "TDLib is not enabled in this build.".into(),
+            error: None,
             account_label: None,
             confirmation_link: None,
         }

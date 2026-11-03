@@ -6,12 +6,12 @@ use lethe_core::archive::{audit_archive, ArchiveExport};
 use lethe_core::pipeline::BackupTarget;
 use lethe_core::EngineError;
 use lethe_crypto::container::{derive_data_key, ContainerReader, ContainerWriter};
-use lethe_crypto::DataKey;
+use lethe_crypto::{CryptoError, DataKey};
 use lethe_store::PendingMedia;
 use serde::{Deserialize, Serialize};
 
 use crate::secrets::{hex_encode, keychain_data_key, BACKUP_KEY_USER};
-use crate::CommandError;
+use crate::{CommandError, ErrorKind};
 
 const BACKUP_KEY_FILE_EXT: &str = "key.bin";
 const BACKUP_KEY_META_EXT: &str = "key.json";
@@ -273,12 +273,19 @@ fn unwrap_passphrase_backup_key(
             "wrapped backup key file must be a file name",
         ));
     }
+    // The key wrapped with another passphrase does not open at all.
+    let wrong_passphrase = |error: CryptoError| match error {
+        CryptoError::Open => CommandError::new(ErrorKind::WrongPassphrase, error.to_string()),
+        other => other.into(),
+    };
     let mut reader = ContainerReader::open(
         fs::File::open(archive_path.with_file_name(sidecar.wrapped_key_file))?,
         &wrapping_key,
-    )?;
+    )
+    .map_err(wrong_passphrase)?;
     let bytes = reader
-        .read_chunk()?
+        .read_chunk()
+        .map_err(wrong_passphrase)?
         .ok_or_else(|| CommandError::msg("wrapped backup key is empty"))?;
     if reader.read_chunk()?.is_some() {
         return Err(CommandError::msg("wrapped backup key has trailing chunks"));
@@ -399,7 +406,7 @@ mod tests {
             keep_going,
         );
 
-        assert!(result.is_err());
+        assert_eq!(result.err().map(|error| error.kind), Some(ErrorKind::WrongPassphrase));
         fs::remove_dir_all(dir).ok();
     }
 
@@ -498,7 +505,7 @@ mod tests {
         write_backup(&dir, "correct horse");
 
         let refused = backup_target(&dir, "r1", Some("other horse")).err().unwrap();
-        assert_eq!(refused.message, "this run already has a backup");
+        assert_eq!(refused.message(), "this run already has a backup");
         assert!(verify_backup(&dir, "r1", Some("correct horse")).unwrap().complete);
 
         fs::remove_dir_all(dir).ok();
