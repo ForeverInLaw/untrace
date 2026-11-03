@@ -41,6 +41,8 @@ pub struct PreviewSummary {
 pub struct PreviewItem {
     platform_id: String,
     content_type: ContentType,
+    /// What the item is when its content type is too coarse: `photo`, `poll`, `chat_join`.
+    subtype: Option<String>,
     created_at_secs: Option<i64>,
     text: Option<String>,
     /// `pending`, `protected` or `undeletable`.
@@ -141,9 +143,11 @@ pub async fn preview_items(
     group: ItemGroup,
     content_type: Option<ContentType>,
     search: String,
+    matching_subtypes: Vec<String>,
     offset: u32,
     limit: u32,
 ) -> Result<Vec<PreviewItem>, CommandError> {
+    let matching_subtypes: Vec<&str> = matching_subtypes.iter().map(String::as_str).collect();
     let store = state.reader.lock().await;
     let rows = store.preview_items(
         &run_id,
@@ -151,6 +155,7 @@ pub async fn preview_items(
             group,
             content_type,
             search: &search,
+            matching_subtypes: &matching_subtypes,
             offset,
             limit,
         },
@@ -160,6 +165,7 @@ pub async fn preview_items(
         .map(|row| PreviewItem {
             platform_id: row.platform_id,
             content_type: row.content_type,
+            subtype: row.subtype,
             created_at_secs: row.created_at_secs,
             text: row.text,
             state: row.state.as_str(),
@@ -276,6 +282,7 @@ const UNSAVED_FILES_SHOWN: u32 = 50;
 #[derive(Serialize)]
 pub struct UnsavedItem {
     platform_id: String,
+    subtype: Option<String>,
     created_at_secs: Option<i64>,
     text: Option<String>,
     /// `unavailable`: the platform refused the file. `unreachable`: anything else.
@@ -309,6 +316,7 @@ pub async fn list_unsaved_files(
             .into_iter()
             .map(|item| UnsavedItem {
                 platform_id: item.platform_id,
+                subtype: item.subtype,
                 created_at_secs: item.created_at_secs,
                 text: item.text,
                 failure: item.failure.as_str(),

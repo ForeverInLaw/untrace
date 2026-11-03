@@ -208,6 +208,7 @@ export interface InterruptedRun {
 
 export interface UnsavedItem {
   platform_id: string;
+  subtype: ItemSubtype | null;
   created_at_secs: number | null;
   text: string | null;
   failure: "unavailable" | "unreachable";
@@ -254,9 +255,22 @@ export interface PreviewSummary extends PreviewCounts {
   undeletable: number;
 }
 
+/// What an item is when its content type is too coarse, as the engine names it.
+export const ITEM_SUBTYPES = [
+  "animation", "audio", "document", "paid_media", "photo", "sticker", "video", "video_note",
+  "voice_note", "expired_media", "location", "venue", "contact", "dice", "game", "poll", "story",
+  "checklist", "checklist_changed", "invoice", "call", "video_chat", "chat_create",
+  "chat_change_title", "chat_change_photo", "chat_delete_photo", "chat_add_members", "chat_join",
+  "chat_leave", "chat_remove_member", "chat_upgrade", "pin_message", "screenshot_taken",
+  "chat_set_theme", "auto_delete_timer", "topic_create", "topic_change", "game_score",
+  "joined_telegram", "gift", "giveaway", "payment", "unsupported", "service",
+] as const;
+export type ItemSubtype = (typeof ITEM_SUBTYPES)[number];
+
 export interface PreviewItem {
   platform_id: string;
   content_type: ContentType;
+  subtype: ItemSubtype | null;
   created_at_secs: number | null;
   text: string | null;
   state: "pending" | "protected" | "undeletable";
@@ -272,6 +286,8 @@ export interface PreviewItemsRequest {
   contentType: ContentType | null;
   /// Text the rows must contain; blank lists them all.
   search: string;
+  /// Subtypes whose wording holds the search; their rows match as well.
+  matchingSubtypes: ItemSubtype[];
   offset: number;
   limit: number;
 }

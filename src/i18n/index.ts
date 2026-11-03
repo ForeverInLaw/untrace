@@ -2,7 +2,7 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import { en } from "./en";
 import { ru } from "./ru";
-import type { CommandError } from "../lib/tauri";
+import type { CommandError, ItemSubtype } from "../lib/tauri";
 
 const STORAGE_KEY = "untrace.language";
 
@@ -23,6 +23,8 @@ export type RuHasEverything = NoGap<Exclude<MessageKeys<typeof en>, MessageKeys<
 export type EnHasEverything = NoGap<Exclude<MessageKeys<typeof ru>, MessageKeys<typeof en>>>;
 // Fails to compile when an error code the backend sends has no sentence.
 export type EveryErrorIsWorded = NoGap<Exclude<`errors.${CommandError["code"]}`, MessageKeys<typeof en>>>;
+// Fails to compile when a subtype the engine names has no label.
+export type EverySubtypeIsWorded = NoGap<Exclude<`subtypes.${ItemSubtype}`, MessageKeys<typeof en>>>;
 
 function initialLanguage(): Language {
   const stored = localStorage.getItem(STORAGE_KEY);
