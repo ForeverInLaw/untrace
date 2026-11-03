@@ -92,6 +92,16 @@ impl OwnMessageCount {
     }
 }
 
+/// A chat searched once per sender the account posts as counts their sum.
+impl std::iter::Sum for OwnMessageCount {
+    fn sum<I: Iterator<Item = Self>>(counts: I) -> Self {
+        counts.fold(Self { count: 0, exact: true }, |total, count| Self {
+            count: total.count + count.count,
+            exact: total.exact && count.exact,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TelegramScopeStatus {
     pub available: bool,
@@ -275,6 +285,15 @@ mod tests {
             OwnMessageCount::from_first_page(3, 3, 100),
             OwnMessageCount { count: 3, exact: true }
         );
+    }
+
+    #[test]
+    fn counts_for_several_senders_add_up_and_are_exact_only_if_each_is() {
+        let small = OwnMessageCount { count: 3, exact: true };
+        let large = OwnMessageCount { count: 250, exact: false };
+
+        assert_eq!([small, small].into_iter().sum::<OwnMessageCount>(), OwnMessageCount { count: 6, exact: true });
+        assert_eq!([small, large].into_iter().sum::<OwnMessageCount>(), OwnMessageCount { count: 253, exact: false });
     }
 
     #[test]
