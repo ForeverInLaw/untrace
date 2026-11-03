@@ -67,7 +67,7 @@ export const useRunStore = create<RunState>((set) => ({
         case "online":
           return { offline: false };
         case "done":
-          return { status: "done", throttleWaitSecs: null };
+          return { status: "done", throttleWaitSecs: null, offline: false };
         case "error":
           return { status: "error", message: e.data.message, throttleWaitSecs: null, offline: false };
       }

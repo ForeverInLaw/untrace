@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::{stream, StreamExt};
@@ -26,6 +27,23 @@ use crate::{
 
 /// TDLib's upper bound for one search page.
 const SEARCH_PAGE: i32 = 100;
+/// How long TDLib may go without a connection before a download is called off. A
+/// shorter drop is a reconnect TDLib rides out, keeping what it already downloaded.
+const CONNECTION_GRACE: Duration = Duration::from_secs(10);
+
+/// Completes once TDLib has been without a connection for `CONNECTION_GRACE`. A
+/// closed channel means the client is gone, which is no connection either.
+async fn connection_lost(mut connection: watch::Receiver<bool>) {
+    loop {
+        if connection.wait_for(|online| !online).await.is_err() {
+            return;
+        }
+        let back = tokio::time::timeout(CONNECTION_GRACE, connection.wait_for(|online| *online)).await;
+        if !matches!(back, Ok(Ok(_))) {
+            return;
+        }
+    }
+}
 
 pub async fn telegram_dry_run_chats(
     app: State<'_, AppState>,
@@ -181,12 +199,8 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
     ) -> Result<FetchedMedia, AdapterError> {
         let (chat_id, message_id) = parse_message_ref(item)
             .ok_or_else(|| AdapterError::Platform("unparseable Telegram message ref".into()))?;
-        let mut connection = self.connection.clone();
-        let connection_lost = async move {
-            // A closed channel means the client is gone, which is no connection either.
-            let _ = connection.wait_for(|online| !online).await;
-        };
-        download_message_file(self.client, chat_id, message_id, &media.url, connection_lost).await
+        let lost = connection_lost(self.connection.clone());
+        download_message_file(self.client, chat_id, message_id, &media.url, lost).await
     }
 
     async fn is_reachable(&self) -> bool {
