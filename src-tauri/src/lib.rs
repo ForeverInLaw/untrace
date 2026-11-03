@@ -27,7 +27,7 @@ use lethe_core::filter::FilterSpec;
 use lethe_core::pipeline::{self, RunRequest};
 use lethe_core::scheduler::Scheduler;
 use lethe_core::{ProgressEvent, RunControl};
-use lethe_store::{Consents, NewRun, Store};
+use lethe_store::{Consents, NewRun, ScopeOutcome, Store};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 use tauri::ipc::Channel;
@@ -59,6 +59,9 @@ pub struct AppState {
     /// Exports under way, by run, with the flag that stops each.
     pub exports: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     pub pending: Arc<Mutex<HashMap<String, PendingRun>>>,
+    /// What each finished run did per chat, until the app closes. Kept nowhere
+    /// else: the receipt names no chat, and the store forgets the run's items.
+    pub scope_results: Arc<Mutex<HashMap<String, Vec<ScopeOutcome>>>>,
     pub pds_host: String,
     pub backup_dir: PathBuf,
     pub session_dir: PathBuf,
@@ -442,6 +445,7 @@ pub(crate) async fn execute_previewed_run(
 
     let store = state.store.clone();
     let controls = state.controls.clone();
+    let scope_results = state.scope_results.clone();
     let plan = run_filters::plan_from_filter(&pending.filter);
     let run_req = RunRequest {
         run_id: run_id.clone(),
@@ -462,7 +466,7 @@ pub(crate) async fn execute_previewed_run(
         let mut scheduler = Scheduler::new();
         let mut guard = store.lock().await;
 
-        let failure = match pipeline::execute(
+        let result = pipeline::execute(
             adapter,
             &mut guard,
             &mut scheduler,
@@ -471,8 +475,16 @@ pub(crate) async fn execute_previewed_run(
             &tx,
             Some(backup),
         )
-        .await
-        {
+        .await;
+        // Before the receipt, which drops the rows they are counted from. A run
+        // that stopped or failed has its own to show too.
+        match guard.scope_outcomes(&run_req.run_id) {
+            Ok(scopes) => {
+                scope_results.lock().await.insert(run_req.run_id.clone(), scopes);
+            }
+            Err(error) => eprintln!("could not count the run per chat: {error}"),
+        }
+        let failure = match result {
             Ok(outcome) => {
                 let summary = outcome.summary(&run_req, started, now_secs());
                 pipeline::store_receipt(&guard, &signer, &summary)
@@ -646,6 +658,7 @@ pub fn run() {
                 controls: Arc::new(Mutex::new(HashMap::new())),
                 exports: Arc::new(Mutex::new(HashMap::new())),
                 pending: Arc::new(Mutex::new(HashMap::new())),
+                scope_results: Arc::new(Mutex::new(HashMap::new())),
                 pds_host,
                 backup_dir,
                 session_dir,
@@ -677,6 +690,8 @@ pub fn run() {
             stop_run,
             run_reads::preview_summary,
             run_reads::preview_backup_space,
+            run_reads::preview_scopes,
+            run_reads::run_scope_results,
             run_reads::preview_items,
             run_reads::set_item_protected,
             run_reads::list_receipts,

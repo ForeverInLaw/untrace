@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use lethe_adapter::ContentType;
 use lethe_crypto::receipt::RunSummary;
-use lethe_store::{ItemGroup, ItemQuery, StoredReceipt};
+use lethe_store::{ItemGroup, ItemQuery, ScopeCount, ScopeOutcome, StoredReceipt};
 use serde::Serialize;
 use tauri::State;
 
@@ -113,6 +113,25 @@ pub(crate) async fn backup_space_for(
 ) -> Result<BackupSpace, CommandError> {
     let media = state.reader.lock().await.pending_media(run_id, consent.into())?;
     backup::backup_space(&state.backup_dir, &media)
+}
+
+/// The chats a previewed run would delete from with these agreements.
+#[tauri::command]
+pub async fn preview_scopes(
+    state: State<'_, AppState>,
+    run_id: String,
+    consent: RunConsent,
+) -> Result<Vec<ScopeCount>, CommandError> {
+    Ok(state.reader.lock().await.pending_scopes(&run_id, consent.into())?)
+}
+
+/// What a run that ended since the app started did per chat; empty for any other.
+#[tauri::command]
+pub async fn run_scope_results(
+    state: State<'_, AppState>,
+    run_id: String,
+) -> Result<Vec<ScopeOutcome>, CommandError> {
+    Ok(state.scope_results.lock().await.get(&run_id).cloned().unwrap_or_default())
 }
 
 #[tauri::command]

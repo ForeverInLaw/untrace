@@ -34,6 +34,12 @@ export function useTelegramScopeStatusQuery(enabled: boolean) {
   });
 }
 
+/// A chat's title from the chat list, or its id once the chat is no longer listed.
+export function useChatTitle(enabled: boolean) {
+  const chats = useTelegramScopeStatusQuery(enabled).data?.chats;
+  return (chatId: string) => chats?.find((chat) => chat.id === chatId)?.title || chatId;
+}
+
 /// Signing in or out changes the Telegram status, its chats and the list of accounts.
 /// The chat list is dropped, not kept while it reloads, so another account's chats
 /// never show under the new one.

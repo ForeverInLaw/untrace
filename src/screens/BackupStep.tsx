@@ -5,10 +5,11 @@ import { errorMessage } from "../lib/errors";
 import { useByteFormat, useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
 import type { RunConsent } from "../lib/tauri";
-import { useBackupSpaceQuery, usePreviewSummaryQuery, useStartRunMutation } from "../queries/runs";
+import { useBackupSpaceQuery, usePreviewScopesQuery, usePreviewSummaryQuery, useStartRunMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { useRunStore } from "../stores/runStore";
 import { NewBackupPassphraseField } from "./BackupExport";
+import { ChatCounts } from "./ChatCounts";
 
 function usePeriodLabel() {
   const { t } = useTranslation();
@@ -59,6 +60,8 @@ export function BackupStep() {
   const summary = summaryQuery.data;
   const spaceQuery = useBackupSpaceQuery(runId, consent);
   const space = spaceQuery.data;
+  const scopesQuery = usePreviewScopesQuery(runId, consent);
+  const scopes = scopesQuery.data ?? [];
   const platform = usePlatformsQuery().data?.find((item) => item.id === platformId)?.display_name ?? platformId;
   const start = useStartRunMutation(platformId, apply);
   const period = usePeriodLabel();
@@ -95,7 +98,7 @@ export function BackupStep() {
       actions={
         <>
           <Button onClick={() => goTo("preview")}>{t("backup.back")}</Button>
-          <Button disabled={!confirmed || start.isPending || deleting === 0 || spaceQuery.isPlaceholderData || !space?.fits} kind="primary" onClick={onStart}>
+          <Button disabled={!confirmed || start.isPending || deleting === 0 || spaceQuery.isPlaceholderData || scopesQuery.isPlaceholderData || !space?.fits} kind="primary" onClick={onStart}>
             {t("backup.start", { count: deleting })}
           </Button>
         </>
@@ -138,6 +141,11 @@ export function BackupStep() {
           )}
         </dl>
       </section>
+      <ChatCounts
+        columns={[t("backup.willDelete")]}
+        heading={t("backup.chats")}
+        rows={scopes.map(({ scope_id: chatId, items }) => ({ chatId, cells: [{ value: items, tone: "goes" }] }))}
+      />
       {space?.fits === false && (
         <Notice tone="fault">
           {t("backup.notEnoughSpace", { needed: formatBytes(space.needed), available: formatBytes(space.available) })}
