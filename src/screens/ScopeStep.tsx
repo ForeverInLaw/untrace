@@ -192,7 +192,10 @@ function TelegramScope() {
   const recount = useRecountOwnMessages(account);
   const dryRun = useTelegramDryRunChatsMutation();
   const onReady = usePreviewReady();
-  const visible = chats.filter((chat) => chat.id in counts && counts[chat.id]?.count !== 0);
+  // A selected chat stays listed at zero, or it could not be cleared from the selection.
+  const visible = chats.filter(
+    (chat) => chatIds.includes(chat.id) || (chat.id in counts && counts[chat.id]?.count !== 0),
+  );
   const knownCounts = chatIds.map((id) => counts[id]).filter((count) => count != null);
   const messages = knownCounts.reduce((sum, { count }) => sum + count, 0);
   const filter = toFilterRequest(draft, available);
