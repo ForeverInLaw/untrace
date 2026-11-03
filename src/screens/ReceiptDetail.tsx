@@ -7,7 +7,7 @@ import { Button, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
-import { useExportBackupMutation, useReceiptQuery, useReceiptsQuery, useVerifyBackupMutation } from "../queries/runs";
+import { useLatestExport, useReceiptQuery, useReceiptsQuery, useVerifyBackupMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { useRunStore } from "../stores/runStore";
 import { BackupExportResult, BackupPassphraseField, ExportBackupButton, useBackupPassphrase } from "./BackupExport";
@@ -46,7 +46,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
     mutationFn: (signature: string) => navigator.clipboard.writeText(signature),
   });
   const hasReceipt = Boolean(receipt);
-  const exportBackup = useExportBackupMutation();
+  const exportFailed = useLatestExport(runId)?.status === "error";
 
   // The list in the sidebar learns about the new receipt once it has landed.
   useEffect(() => {
@@ -58,7 +58,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
   const actions = (
     <>
       <Button kind={verified ? "primary" : "secondary"} onClick={exit.onClick}>{exit.label}</Button>
-      <ExportBackupButton backupPassphrase={backupPassphrase} disabled={!receipt} mutation={exportBackup} runId={runId} />
+      <ExportBackupButton backupPassphrase={backupPassphrase} disabled={!receipt} runId={runId} />
       {!verified && (
         <Button
           disabled={!receipt || verify.isPending}
@@ -138,9 +138,9 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
               </dd>
             </div>
           </dl>
-          {(verifyFailed || exportBackup.isError) && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
+          {(verifyFailed || exportFailed) && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
           {verify.isError && <Notice tone="fault">{errorMessage(verify.error)}</Notice>}
-          <BackupExportResult mutation={exportBackup} runId={runId} />
+          <BackupExportResult runId={runId} />
         </div>
         <figure className="receipt__seal">
           <Seal runId={runId} size={SEAL_SIZE} />

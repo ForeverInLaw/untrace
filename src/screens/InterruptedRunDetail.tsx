@@ -3,7 +3,7 @@ import { Button, Notice, Screen } from "../components/ui";
 import { useDateFormat } from "../lib/format";
 import type { InterruptedRun } from "../lib/tauri";
 import { usePlatformsQuery } from "../queries/platforms";
-import { useExportBackupMutation } from "../queries/runs";
+import { useLatestExport } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { BackupExportResult, BackupPassphraseField, ExportBackupButton, useBackupPassphrase } from "./BackupExport";
 import { UnsavedFilesSection } from "./UnsavedFilesSection";
@@ -19,7 +19,7 @@ export function InterruptedRunDetail({ run, exit }: InterruptedRunDetailProps) {
   const format = useDateFormat();
   const flowPassphrase = useFlowStore((s) => s.passphrase);
   const { passphrase, setPassphrase, backupPassphrase } = useBackupPassphrase(flowPassphrase);
-  const exportBackup = useExportBackupMutation();
+  const exportFailed = useLatestExport(run.run_id)?.status === "error";
   const platform = usePlatformsQuery().data?.find((item) => item.id === run.platform)?.display_name ?? run.platform;
 
   return (
@@ -27,7 +27,7 @@ export function InterruptedRunDetail({ run, exit }: InterruptedRunDetailProps) {
       actions={
         <>
           <Button onClick={exit.onClick}>{exit.label}</Button>
-          <ExportBackupButton backupPassphrase={backupPassphrase} kind="primary" mutation={exportBackup} runId={run.run_id} />
+          <ExportBackupButton backupPassphrase={backupPassphrase} kind="primary" runId={run.run_id} />
         </>
       }
       heading={t("run.failedHeading")}
@@ -41,8 +41,8 @@ export function InterruptedRunDetail({ run, exit }: InterruptedRunDetailProps) {
         <div><dt>{t("receipt.started")}</dt><dd>{format.moment(run.started_epoch_secs)}</dd></div>
         <div><dt>{t("receipt.deleted")}</dt><dd>{t("cleanup.plainNumber", { value: run.deleted })}</dd></div>
       </dl>
-      {exportBackup.isError && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
-      <BackupExportResult mutation={exportBackup} runId={run.run_id} />
+      {exportFailed && <BackupPassphraseField onChange={setPassphrase} value={passphrase} />}
+      <BackupExportResult runId={run.run_id} />
       <UnsavedFilesSection account={run.account_label} platformId={run.platform} runId={run.run_id} />
     </Screen>
   );

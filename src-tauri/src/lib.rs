@@ -11,11 +11,11 @@
 //! (`run_offthread`); the future is built inside that thread and never crosses a
 //! thread boundary, so it is never required to be `Send`.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fs;
 use std::future::Future;
 use std::io;
-use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -518,7 +518,13 @@ async fn export_backup(
     on_progress: Channel<backup::ExportProgress>,
 ) -> Result<backup::ExportOutcome, CommandError> {
     let stop = Arc::new(AtomicBool::new(false));
-    claim_export_slot(&mut *state.exports.lock().await, &run_id, stop.clone())?;
+    // One export of a backup at a time: a second one would write a second folder.
+    match state.exports.lock().await.entry(run_id.clone()) {
+        Entry::Occupied(_) => return Err(CommandError::msg("this backup is already being exported")),
+        Entry::Vacant(slot) => {
+            slot.insert(stop.clone());
+        }
+    }
     let backup_dir = state.backup_dir.clone();
     let exporting = run_id.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
@@ -536,30 +542,13 @@ async fn export_backup(
             },
             |progress| {
                 let _ = on_progress.send(progress);
-                if stop.load(Ordering::SeqCst) {
-                    ControlFlow::Break(())
-                } else {
-                    ControlFlow::Continue(())
-                }
             },
+            || stop.load(Ordering::SeqCst),
         )
     })
     .await;
     state.exports.lock().await.remove(&run_id);
     outcome?
-}
-
-/// One export of a backup at a time: a second one would write a second folder.
-fn claim_export_slot(
-    exports: &mut HashMap<String, Arc<AtomicBool>>,
-    run_id: &str,
-    stop: Arc<AtomicBool>,
-) -> Result<(), CommandError> {
-    if exports.contains_key(run_id) {
-        return Err(CommandError::msg("this backup is already being exported"));
-    }
-    exports.insert(run_id.to_owned(), stop);
-    Ok(())
 }
 
 #[tauri::command]
