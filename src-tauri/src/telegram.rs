@@ -63,6 +63,35 @@ pub struct TelegramChatSummary {
     pub last_message_id: Option<String>,
 }
 
+/// How many of the user's messages a chat holds, as the chat list shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct OwnMessageCount {
+    pub count: usize,
+    /// False when the count is TDLib's estimate, which can differ from what a preview finds.
+    pub exact: bool,
+}
+
+impl OwnMessageCount {
+    /// Read from the first page of a search for the user's messages that asked for
+    /// `limit` of them. TDLib's `total_count` drifts from page to page, so only a page
+    /// that holds fewer messages than asked for, and all it reports, counts exactly.
+    #[cfg_attr(
+        not(any(
+            feature = "telegram-tdlib-docs",
+            feature = "telegram-tdlib-local",
+            feature = "telegram-tdlib-download"
+        )),
+        allow(dead_code)
+    )]
+    pub fn from_first_page(found: usize, total_count: i32, limit: i32) -> Self {
+        let reported = usize::try_from(total_count).unwrap_or(0);
+        Self {
+            count: reported.max(found),
+            exact: found < usize::try_from(limit).unwrap_or(0) && found >= reported,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TelegramScopeStatus {
     pub available: bool,
@@ -176,7 +205,7 @@ mod fallback {
     pub async fn telegram_own_message_count(
         _state: State<'_, TelegramState>,
         chat_id: String,
-    ) -> Result<usize, CommandError> {
+    ) -> Result<OwnMessageCount, CommandError> {
         let _ = chat_id;
         Err(CommandError::msg(TDLIB_DISABLED))
     }
@@ -235,3 +264,34 @@ pub use fallback::*;
     feature = "telegram-tdlib-download"
 ))]
 pub use tdlib::*;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_small_chat_found_in_full_is_counted_exactly() {
+        assert_eq!(
+            OwnMessageCount::from_first_page(3, 3, 100),
+            OwnMessageCount { count: 3, exact: true }
+        );
+    }
+
+    #[test]
+    fn a_count_the_page_does_not_bear_out_is_an_estimate() {
+        // TDLib reported 4 while the page held 3: the case from a real run.
+        assert_eq!(
+            OwnMessageCount::from_first_page(3, 4, 100),
+            OwnMessageCount { count: 4, exact: false }
+        );
+        // A full page says nothing about what lies beyond it.
+        assert_eq!(
+            OwnMessageCount::from_first_page(100, 100, 100),
+            OwnMessageCount { count: 100, exact: false }
+        );
+        assert_eq!(
+            OwnMessageCount::from_first_page(100, 2_500, 100),
+            OwnMessageCount { count: 2_500, exact: false }
+        );
+    }
+}

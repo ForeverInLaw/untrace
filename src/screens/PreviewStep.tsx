@@ -3,6 +3,7 @@ import { Search, ShieldCheck } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
 import { MoreRows } from "../components/MoreRows";
+import { RemainsElsewhere } from "../components/RemainsElsewhere";
 import { Button, Checkbox, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useByteFormat, useDateFormat } from "../lib/format";
@@ -248,10 +249,10 @@ export function PreviewStep() {
       fill
       heading={<Trans components={{ n: <em className="count" /> }} count={pending} i18nKey="preview.heading" />}
       lead={t("preview.stays", { protected: protectedCount })}
-      note={t("preview.limit")}
     >
       {summaryQuery.isError && <Notice tone="fault">{errorMessage(summaryQuery.error)}</Notice>}
       {summary && <DeleteReachFacts summary={summary} />}
+      <RemainsElsewhere />
       <label className="search">
         <Search aria-hidden="true" size={15} />
         <input

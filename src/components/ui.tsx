@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes, useState } from "react";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -135,5 +136,18 @@ export function Screen({ heading, lead, note, actions, fill = false, children }:
         </footer>
       )}
     </div>
+  );
+}
+
+/// A titled section that opens on click, for details most people skip.
+export function Disclosure({ summary, children }: { summary: ReactNode; children: ReactNode }) {
+  return (
+    <details className="disclosure">
+      <summary>
+        <ChevronRight aria-hidden="true" className="disclosure__icon" size={16} />
+        {summary}
+      </summary>
+      {children}
+    </details>
   );
 }

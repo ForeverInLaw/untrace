@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Button, ConfirmButton, Notice, Screen } from "../components/ui";
 import { errorMessage } from "../lib/errors";
+import { accountName } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
 import { useAccountsQuery, useDisconnectAccountMutation } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
@@ -27,7 +28,7 @@ export function AccountsView() {
         {rows.map((account) => (
           <li className="account-row" key={`${account.platform}:${account.label}`}>
             <span>
-              <strong>{account.label}</strong>
+              <strong>{accountName(account.label)}</strong>
               <small>{platforms.find((item) => item.id === account.platform)?.display_name ?? account.platform}</small>
             </span>
             <ConfirmButton

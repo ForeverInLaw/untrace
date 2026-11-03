@@ -3,9 +3,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { Seal } from "../components/Seal";
+import { RemainsElsewhere } from "../components/RemainsElsewhere";
 import { Button, Notice, Screen } from "../components/ui";
 import { errorMessage, isPassphraseRefusal } from "../lib/errors";
-import { useDateFormat } from "../lib/format";
+import { accountName, useDateFormat } from "../lib/format";
 import { usePlatformsQuery } from "../queries/platforms";
 import {
   useExportReceiptMutation,
@@ -112,13 +113,12 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
         <Trans components={{ n: <em className="count" /> }} count={summary.deleted} i18nKey="receipt.heading" />
       }
       lead={summary.failed > 0 ? t("receipt.failedLine", { count: summary.failed }) : undefined}
-      note={t("preview.limit")}
     >
       {onlyForSelf > 0 && <Notice tone="caution">{t("receipt.onlyForSelfLine", { count: onlyForSelf })}</Notice>}
       <div className="receipt">
         <div>
           <dl className="facts facts--compact">
-            <div><dt>{t("receipt.account")}</dt><dd>{platform}, {summary.account_label}</dd></div>
+            <div><dt>{t("receipt.account")}</dt><dd>{platform}, {accountName(summary.account_label)}</dd></div>
             <div><dt>{t("receipt.started")}</dt><dd>{format.moment(summary.started_epoch_secs)}</dd></div>
             <div><dt>{t("receipt.finished")}</dt><dd>{format.moment(summary.finished_epoch_secs)}</dd></div>
             <div><dt>{t("receipt.deleted")}</dt><dd>{t("cleanup.plainNumber", { value: summary.deleted })}</dd></div>
@@ -166,6 +166,7 @@ export function ReceiptDetail({ runId, exit }: ReceiptDetailProps) {
           </figcaption>
         </figure>
       </div>
+      <RemainsElsewhere />
       {/* Kept before the receipt, so once the receipt is there these are too. */}
       <RunChatResults ended={hasReceipt} runId={runId} />
       <UnsavedFilesSection account={summary.account_label} platformId={summary.platform} runId={runId} />

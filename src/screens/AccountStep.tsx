@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, ConfirmButton, Notice, Screen, TextField } from "../components/ui";
 import { errorMessage } from "../lib/errors";
+import { accountName } from "../lib/format";
 import type { TelegramAuthStatus } from "../lib/tauri";
 import { usePlatformsQuery } from "../queries/platforms";
 import { useAccountsQuery, useConnectAccountMutation, useDisconnectAccountMutation } from "../queries/runs";
@@ -200,7 +201,7 @@ function TelegramConnect() {
       return <p className="help">{t("account.telegram.signingOut")}</p>;
     }
     if (ready) {
-      return <p className="help">{t("account.telegram.ready", { label })}</p>;
+      return <p className="help">{t("account.telegram.ready", { label: accountName(label) })}</p>;
     }
     return (
       <form id={CONNECT_FORM} onSubmit={onSubmit}>

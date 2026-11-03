@@ -1,6 +1,7 @@
 import { hashKey, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
+  type OwnMessageCount,
   type TelegramAuthCodeRequest,
   type TelegramAuthPasswordRequest,
   type TelegramAuthStartRequest,
@@ -81,7 +82,7 @@ export function useTelegramAuthPasswordMutation() {
 }
 
 /// Own-message count per chat id; null when it could not be determined.
-export type OwnMessageCounts = Record<string, number | null>;
+export type OwnMessageCounts = Record<string, OwnMessageCount | null>;
 
 let countQueue: Promise<unknown> = Promise.resolve();
 
@@ -105,7 +106,7 @@ export function useTelegramOwnMessageCounts(account: string, chats: TelegramChat
   const queryClient = useQueryClient();
   const latestCount = (chatId: string) =>
     queryClient
-      .getQueriesData<number>({ queryKey: ownCountKey(account, chatId) })
+      .getQueriesData<OwnMessageCount>({ queryKey: ownCountKey(account, chatId) })
       .reverse()
       .find(([, count]) => count !== undefined)?.[1];
 
@@ -132,7 +133,8 @@ export function useTelegramOwnMessageCounts(account: string, chats: TelegramChat
       const counts: OwnMessageCounts = {};
       results.forEach((result, index) => {
         const count = result.isError || !result.isEnabled ? null : result.data;
-        if (count !== undefined) counts[chats[index].id] = count;
+        // An earlier count shown while the chat is recounted is no longer exact.
+        if (count !== undefined) counts[chats[index].id] = count && result.isPlaceholderData ? { ...count, exact: false } : count;
       });
       return { counts, uncounted: results.filter((result) => result.isFetching).length };
     },

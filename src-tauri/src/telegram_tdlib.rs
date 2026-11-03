@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use lethe_adapter::PlatformAdapter;
 use lethe_telegram::tdlib_bridge::{
-    list_chat_scopes, search_own_messages, OwnMessagePage, TdlibClientId, TelegramChatKind,
+    list_chat_scopes, search_own_messages, tally_own_messages, OwnMessagePage, TdlibClientId,
+    TelegramChatKind,
 };
 use tauri::ipc::Channel;
 use tauri::State;
@@ -15,7 +16,7 @@ use tokio::sync::{watch, Mutex, OnceCell};
 
 use crate::secrets::{hex_encode, keychain_data_key, SESSION_KEY_USER};
 use crate::telegram::{
-    TelegramAuthCodeRequest, TelegramAuthPasswordRequest, TelegramAuthPhase,
+    OwnMessageCount, TelegramAuthCodeRequest, TelegramAuthPasswordRequest, TelegramAuthPhase,
     TelegramAuthStartRequest, TelegramAuthStatus, TelegramChatSummary, TelegramDryRunRequest,
     TelegramScopeKind, TelegramScopeStatus,
 };
@@ -519,16 +520,15 @@ pub async fn telegram_auth_password(
 /// Longest FLOOD_WAIT worth sitting through; anything longer surfaces as an error.
 const MAX_FLOOD_WAIT_SECS: u64 = 300;
 
-/// Own-message search that honors Telegram's FLOOD_WAIT instead of failing the run.
-async fn own_message_page(
-    client: TdlibClientId,
-    chat_id: i64,
-    current_user_id: i64,
-    from_message_id: i64,
-    limit: i32,
-) -> Result<OwnMessagePage, lethe_adapter::AdapterError> {
+/// Runs a TDLib search again after a FLOOD_WAIT up to `MAX_FLOOD_WAIT_SECS` instead of failing.
+async fn sitting_out_flood_waits<T, F>(
+    mut search: impl FnMut() -> F,
+) -> Result<T, lethe_adapter::AdapterError>
+where
+    F: std::future::Future<Output = Result<T, lethe_adapter::AdapterError>>,
+{
     loop {
-        match search_own_messages(client, chat_id, current_user_id, from_message_id, limit).await {
+        match search().await {
             Err(lethe_adapter::AdapterError::RateLimited { retry_after_secs })
                 if retry_after_secs <= MAX_FLOOD_WAIT_SECS =>
             {
@@ -539,17 +539,31 @@ async fn own_message_page(
     }
 }
 
-/// How many of the user's messages a chat holds; the count is approximate for large chats.
+async fn own_message_page(
+    client: TdlibClientId,
+    chat_id: i64,
+    current_user_id: i64,
+    from_message_id: i64,
+    limit: i32,
+) -> Result<OwnMessagePage, lethe_adapter::AdapterError> {
+    sitting_out_flood_waits(|| search_own_messages(client, chat_id, current_user_id, from_message_id, limit)).await
+}
+
+/// One search page this long counts most chats exactly.
+const OWN_COUNT_PAGE: i32 = 100;
+
+/// How many of the user's messages a chat holds: exact for a chat whose messages fit
+/// one page, TDLib's estimate for a larger one.
 #[tauri::command]
 pub async fn telegram_own_message_count(
     state: State<'_, TelegramState>,
     chat_id: String,
-) -> Result<usize, CommandError> {
+) -> Result<OwnMessageCount, CommandError> {
     let (_auth, client, current_user_id) = state.ready_context().await?;
-    let page = own_message_page(client, parse_chat_id(&chat_id)?, current_user_id, 0, 1).await?;
-    Ok(usize::try_from(page.total_count)
-        .unwrap_or(0)
-        .max(page.messages.len()))
+    let chat_id = parse_chat_id(&chat_id)?;
+    let tally =
+        sitting_out_flood_waits(|| tally_own_messages(client, chat_id, current_user_id, OWN_COUNT_PAGE)).await?;
+    Ok(OwnMessageCount::from_first_page(tally.found, tally.total_count, OWN_COUNT_PAGE))
 }
 
 #[tauri::command]
