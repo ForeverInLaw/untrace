@@ -1,8 +1,14 @@
 import i18n from "../i18n";
 import type { CommandError } from "./tauri";
 
-function isCommandError(error: object): error is CommandError {
-  return "code" in error && typeof error.code === "string" && "message" in error;
+function isCommandError(error: unknown): error is CommandError {
+  return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" && "message" in error;
+}
+
+/// Whether a backup turned down the password it was given, or got none: the
+/// backup itself may be fine.
+export function isPassphraseRefusal(error: unknown): boolean {
+  return isCommandError(error) && (error.code === "wrong_passphrase" || error.code === "passphrase_needed");
 }
 
 /// Words any failure in the interface language: a command's or a run's by its code,

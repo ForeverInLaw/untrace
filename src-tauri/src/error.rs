@@ -26,6 +26,7 @@ pub enum ErrorKind {
     AnotherRunIsLive,
     NoDiskSpace,
     WrongPassphrase,
+    PassphraseNeeded,
     BackupWriteFailed,
     KeychainUnavailable,
     TelegramNotConnected,

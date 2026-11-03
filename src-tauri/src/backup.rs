@@ -108,6 +108,14 @@ pub fn backup_target(
     if path.try_exists()? {
         return Err(CommandError::msg("this run already has a backup"));
     }
+    // Key files without a backup are left by a start that failed before writing it.
+    // Kept, they would make a backup under the keychain key ask for that passphrase.
+    for stale in [BACKUP_KEY_META_EXT, BACKUP_KEY_FILE_EXT] {
+        match fs::remove_file(path.with_extension(stale)) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+            _ => {}
+        }
+    }
     let key = match backup_passphrase {
         Some(passphrase) => passphrase_backup_key(&path, passphrase)?,
         None => backup_data_key()?,
@@ -197,15 +205,30 @@ pub fn export_backup(
     }))
 }
 
+/// Whether the run's backup opens only with the passphrase it was written with,
+/// rather than with the key in the keychain.
+pub fn needs_passphrase(base_dir: &Path, run_id: &str) -> bool {
+    backup_path(base_dir, run_id).with_extension(BACKUP_KEY_META_EXT).exists()
+}
+
 fn open_backup(
     base_dir: &Path,
     run_id: &str,
     backup_passphrase: Option<&str>,
 ) -> Result<(fs::File, DataKey), CommandError> {
     let path = backup_path(base_dir, run_id);
-    let key = match backup_passphrase.filter(|passphrase| !passphrase.is_empty()) {
-        Some(passphrase) => unwrap_passphrase_backup_key(&path, passphrase)?,
-        None => backup_data_key()?,
+    // The backup decides which key opens it: a passphrase it was not written with
+    // is ignored, and without the one it was, the keychain key would only fail to
+    // decrypt it, which reads as damage.
+    let key = if needs_passphrase(base_dir, run_id) {
+        match backup_passphrase.filter(|passphrase| !passphrase.is_empty()) {
+            Some(passphrase) => unwrap_passphrase_backup_key(&path, passphrase)?,
+            None => {
+                return Err(CommandError::new(ErrorKind::PassphraseNeeded, "this backup needs its passphrase"));
+            }
+        }
+    } else {
+        backup_data_key()?
     };
     let file = fs::File::open(&path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
@@ -407,6 +430,41 @@ mod tests {
         );
 
         assert_eq!(result.err().map(|error| error.kind), Some(ErrorKind::WrongPassphrase));
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_backup_with_a_passphrase_asks_for_it_rather_than_failing_to_decrypt() {
+        let dir = test_dir("backup-locked");
+        write_backup(&dir, "correct horse");
+
+        assert!(needs_passphrase(&dir, "r1"));
+        for missing in [None, Some("")] {
+            let refused = verify_backup(&dir, "r1", missing).err().map(|error| error.kind);
+            assert_eq!(refused, Some(ErrorKind::PassphraseNeeded));
+        }
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_start_that_failed_before_its_backup_leaves_no_passphrase_behind() {
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+        let dir = test_dir("backup-restart");
+        // Key files written, then the start failed before the archive.
+        backup_target(&dir, "r1", Some("first try")).unwrap();
+
+        backup_target(&dir, "r1", None).unwrap();
+
+        assert!(!needs_passphrase(&dir, "r1"));
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_backup_under_the_keychain_key_needs_no_passphrase() {
+        let dir = test_dir("backup-keychain");
+        fs::write(backup_path(&dir, "r1"), b"sealed").unwrap();
+
+        assert!(!needs_passphrase(&dir, "r1"));
         fs::remove_dir_all(dir).ok();
     }
 
