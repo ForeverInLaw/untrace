@@ -51,7 +51,6 @@ const SESSION_DIR: &str = "sessions";
 const TELEGRAM_DIR: &str = "telegram";
 /// Where a Bluesky file waits, unencrypted, until the backup has it.
 const DOWNLOADS_DIR: &str = "downloads";
-const ANOTHER_RUN_IS_LIVE: &str = "another cleanup is still running";
 
 pub struct AppState {
     pub egress: Arc<lethe_net::Egress>,
@@ -339,7 +338,7 @@ async fn retry_unsaved_files(
     run_id: String,
 ) -> Result<DryRunResult, CommandError> {
     if !state.controls.lock().await.is_empty() {
-        return Err(CommandError::new(ErrorKind::AnotherRunIsLive, ANOTHER_RUN_IS_LIVE));
+        return Err(CommandError::another_run_is_live());
     }
     let retry_id = format!("retry-{}", now_secs());
     let retry = state
@@ -379,7 +378,7 @@ fn claim_run_slot(
     control: RunControl,
 ) -> Result<(), CommandError> {
     if !controls.is_empty() {
-        return Err(CommandError::new(ErrorKind::AnotherRunIsLive, ANOTHER_RUN_IS_LIVE));
+        return Err(CommandError::another_run_is_live());
     }
     controls.insert(run_id.to_owned(), control);
     Ok(())
@@ -477,7 +476,7 @@ pub(crate) async fn execute_previewed_run(
                     .err()
                     .map(CommandError::from)
             }
-            Err(e) => Some(CommandError::from(e)),
+            Err(e) => Some(CommandError::run_failure(e)),
         };
 
         drop(guard);
@@ -709,7 +708,7 @@ mod tests {
     #[test]
     fn a_run_reports_progress_as_the_engine_words_it_and_its_failure_with_a_code() {
         let progress = RunEvent::Progress(ProgressEvent::Offline);
-        let failure = RunEvent::Error(lethe_core::EngineError::Aborted.into());
+        let failure = RunEvent::Error(CommandError::run_failure(lethe_core::EngineError::Aborted));
 
         assert_eq!(serde_json::to_value(progress).unwrap(), serde_json::json!({ "event": "offline" }));
         assert_eq!(

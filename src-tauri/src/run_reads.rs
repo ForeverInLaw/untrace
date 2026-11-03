@@ -263,9 +263,7 @@ pub async fn disconnect_account(
         return session::remove(&state.session_dir, &platform, &label);
     }
     if !state.controls.lock().await.is_empty() {
-        return Err(CommandError::msg(
-            "Wait for the cleanup to finish before signing out of Telegram",
-        ));
+        return Err(CommandError::another_run_is_live());
     }
     telegram.log_out().await
 }

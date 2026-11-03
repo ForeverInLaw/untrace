@@ -59,6 +59,21 @@ impl CommandError {
         }
     }
 
+    /// Why a run ended without its receipt. Only here does an IO error mean the
+    /// backup could not be written, and an abort that the person stopped the run.
+    pub fn run_failure(error: EngineError) -> Self {
+        let kind = match error {
+            EngineError::Aborted => ErrorKind::RunStopped,
+            EngineError::Io(_) => ErrorKind::BackupWriteFailed,
+            other => return other.into(),
+        };
+        Self::new(kind, error.to_string())
+    }
+
+    pub fn another_run_is_live() -> Self {
+        Self::new(ErrorKind::AnotherRunIsLive, "another cleanup is still running")
+    }
+
     /// An error TDLib answered with: its `code` and the Telegram error name in `message`.
     pub fn telegram(code: i32, message: &str) -> Self {
         let kind = match message {
@@ -74,12 +89,14 @@ impl CommandError {
     }
 }
 
-/// How long Telegram asks to wait, from `FLOOD_WAIT_<secs>` or TDLib's own 429 text.
+/// How long Telegram asks to wait, from `FLOOD_WAIT_<secs>` or TDLib's own 429 text;
+/// a 429 that names no wait gets a minute.
 fn telegram_wait(code: i32, message: &str) -> Option<u64> {
-    let secs = message
+    message
         .strip_prefix("FLOOD_WAIT_")
-        .or_else(|| message.strip_prefix("Too Many Requests: retry after "))?;
-    secs.parse().ok().or((code == 429).then_some(60))
+        .or_else(|| message.strip_prefix("Too Many Requests: retry after "))
+        .and_then(|secs| secs.parse().ok())
+        .or((code == 429).then_some(60))
 }
 
 impl From<AdapterError> for CommandError {
@@ -96,19 +113,20 @@ impl From<AdapterError> for CommandError {
 
 impl From<EngineError> for CommandError {
     fn from(error: EngineError) -> Self {
-        let kind = match error {
-            EngineError::Adapter(adapter) => return adapter.into(),
-            EngineError::Aborted => ErrorKind::RunStopped,
-            EngineError::Io(_) => ErrorKind::BackupWriteFailed,
-            _ => ErrorKind::Unknown,
-        };
-        Self::new(kind, error.to_string())
+        match error {
+            EngineError::Adapter(adapter) => adapter.into(),
+            other => Self::msg(other.to_string()),
+        }
     }
 }
 
 impl From<keyring::Error> for CommandError {
     fn from(error: keyring::Error) -> Self {
-        Self::new(ErrorKind::KeychainUnavailable, error.to_string())
+        let kind = match error {
+            keyring::Error::PlatformFailure(_) | keyring::Error::NoStorageAccess(_) => ErrorKind::KeychainUnavailable,
+            _ => ErrorKind::Unknown,
+        };
+        Self::new(kind, error.to_string())
     }
 }
 
@@ -182,14 +200,29 @@ mod tests {
 
     #[test]
     fn a_run_the_person_stopped_says_so() {
-        assert_eq!(sent(CommandError::from(EngineError::Aborted))["code"], "run_stopped");
+        assert_eq!(sent(CommandError::run_failure(EngineError::Aborted))["code"], "run_stopped");
     }
 
     #[test]
-    fn a_backup_that_cannot_be_written_says_so() {
-        let error = CommandError::from(EngineError::Io("No space left on device".into()));
+    fn a_run_whose_backup_cannot_be_written_says_so() {
+        let error = CommandError::run_failure(EngineError::Io("No space left on device".into()));
 
         assert_eq!(sent(error)["code"], "backup_write_failed");
+    }
+
+    #[test]
+    fn a_backup_that_cannot_be_read_is_not_a_failed_write() {
+        let error = CommandError::from(EngineError::Io("backup archive is damaged".into()));
+
+        assert_eq!(sent(error)["code"], "unknown");
+    }
+
+    #[test]
+    fn only_a_keychain_that_cannot_be_reached_asks_to_unlock_it() {
+        let locked = keyring::Error::NoStorageAccess("locked".into());
+
+        assert_eq!(sent(locked.into())["code"], "keychain_unavailable");
+        assert_eq!(sent(keyring::Error::TooLong("user".into(), 255).into())["code"], "unknown");
     }
 
     #[test]
@@ -213,6 +246,7 @@ mod tests {
             json!({ "code": "rate_limited", "wait_secs": 120, "message": "TDLib 420: FLOOD_WAIT_120" })
         );
         assert_eq!(sent(CommandError::telegram(429, "Too Many Requests: retry after 30"))["wait_secs"], 30);
+        assert_eq!(sent(CommandError::telegram(429, "Too Many Requests"))["wait_secs"], 60);
     }
 
     #[test]

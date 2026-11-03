@@ -15,7 +15,8 @@ export function errorMessage(error: unknown): string | null {
   if (typeof error !== "object") {
     return i18n.t("errors.unknown", { message: String(error) });
   }
-  if (isCommandError(error) && error.code !== "unknown" && i18n.exists(`errors.${error.code}`)) {
+  // A code newer than this interface has no sentence yet.
+  if (isCommandError(error) && i18n.exists(`errors.${error.code}`)) {
     return i18n.t(`errors.${error.code}`, error);
   }
   const message = "message" in error && typeof error.message === "string" ? error.message : String(error);
