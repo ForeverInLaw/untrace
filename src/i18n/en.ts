@@ -121,6 +121,7 @@ export const en = {
   "preview.protectFailed": "Not saved",
   "preview.noText": "No text",
   "preview.subtypeWithText": "{{subtype}}: {{text}}",
+  "preview.typeWithSize": "{{type}} · {{size}}",
   "preview.toggleRow": "Delete this item",
   "table.more": "Show more",
   "preview.empty": "Nothing matched the conditions, so there is nothing to delete.",

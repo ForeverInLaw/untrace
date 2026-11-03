@@ -281,6 +281,10 @@ export interface PreviewItem {
   subtype: string | null;
   created_at_secs: number | null;
   text: string | null;
+  /// The name of its first named file.
+  file_name: string | null;
+  /// Bytes of its files; null unless every file's size is known.
+  file_size: number | null;
   state: "pending" | "protected" | "undeletable";
   only_for_self: boolean;
 }
