@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use lethe_adapter::ContentType;
 use lethe_crypto::receipt::RunSummary;
-use lethe_store::{ItemGroup, ItemQuery, ScopeCount, ScopeOutcome, StoredReceipt};
+use lethe_store::{ItemGroup, ItemQuery, ScopeCount, ScopeOutcome, StoredReceipt, UnsavedCursor, UnsavedFiles};
 use serde::Serialize;
 use tauri::State;
 
@@ -276,9 +276,6 @@ pub async fn disconnect_account(
     telegram.log_out().await
 }
 
-/// As many rows as a receipt shows; the total covers the rest.
-const UNSAVED_FILES_SHOWN: u32 = 50;
-
 #[derive(Serialize)]
 pub struct UnsavedItem {
     platform_id: String,
@@ -289,38 +286,32 @@ pub struct UnsavedItem {
     failure: &'static str,
 }
 
-#[derive(Serialize)]
-pub struct UnsavedFiles {
-    total: u64,
-    /// How many may go without their file, with the person's consent.
-    unavailable: u64,
-    items: Vec<UnsavedItem>,
-}
-
-/// What stayed in a run because its files could not be saved.
+/// How much stayed in a run because its files could not be saved.
 #[tauri::command]
-pub async fn list_unsaved_files(
+pub async fn unsaved_files(
     state: State<'_, AppState>,
     run_id: String,
 ) -> Result<UnsavedFiles, CommandError> {
-    let unsaved = state
-        .reader
-        .lock()
-        .await
-        .unsaved_files(&run_id, UNSAVED_FILES_SHOWN)?;
-    Ok(UnsavedFiles {
-        total: unsaved.total,
-        unavailable: unsaved.unavailable,
-        items: unsaved
-            .items
-            .into_iter()
-            .map(|item| UnsavedItem {
-                platform_id: item.platform_id,
-                subtype: item.subtype,
-                created_at_secs: item.created_at_secs,
-                text: item.text,
-                failure: item.failure.as_str(),
-            })
-            .collect(),
-    })
+    Ok(state.reader.lock().await.unsaved_files(&run_id)?)
+}
+
+/// One page of what stayed in a run because its files could not be saved.
+#[tauri::command]
+pub async fn unsaved_items(
+    state: State<'_, AppState>,
+    run_id: String,
+    after: Option<UnsavedCursor>,
+    limit: u32,
+) -> Result<Vec<UnsavedItem>, CommandError> {
+    let items = state.reader.lock().await.unsaved_items(&run_id, after.as_ref(), limit)?;
+    Ok(items
+        .into_iter()
+        .map(|item| UnsavedItem {
+            platform_id: item.platform_id,
+            subtype: item.subtype,
+            created_at_secs: item.created_at_secs,
+            text: item.text,
+            failure: item.failure.as_str(),
+        })
+        .collect())
 }

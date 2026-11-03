@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { MoreRows } from "../components/MoreRows";
 import { Button, CheckboxLabel, Notice } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useDateFormat } from "../lib/format";
 import { useItemText } from "../lib/itemText";
-import { useRetryUnsavedFilesMutation, useUnsavedFilesQuery } from "../queries/runs";
+import { useRetryUnsavedFilesMutation, useUnsavedFilesQuery, useUnsavedItemsQuery } from "../queries/runs";
 import { useFlowStore } from "../stores/flowStore";
 import { selectRunLive, useRunStore } from "../stores/runStore";
 import { NewBackupPassphraseField, useBackupPassphrase } from "./BackupExport";
@@ -28,6 +29,7 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
   const [allowLostFiles, setAllowLostFiles] = useState(false);
   const unsavedQuery = useUnsavedFilesQuery(runId);
   const unsaved = unsavedQuery.data;
+  const items = useUnsavedItemsQuery(runId);
   const retry = useRetryUnsavedFilesMutation(platformId);
 
   if (unsavedQuery.isError) {
@@ -36,8 +38,6 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
   if (!unsaved || unsaved.total === 0) {
     return null;
   }
-
-  const hidden = unsaved.total - unsaved.items.length;
 
   const onRetry = () => {
     retry.mutate(
@@ -60,7 +60,7 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
             </tr>
           </thead>
           <tbody>
-            {unsaved.items.map((item) => (
+            {items.data?.pages.flat().map((item) => (
               <tr key={item.platform_id}>
                 <td><div className="cell-line"><span className="cell-line__text">{itemText(item)}</span></div></td>
                 <td className="unsaved__why">{t(`unsaved.failure.${item.failure}`)}</td>
@@ -69,8 +69,9 @@ export function UnsavedFilesSection({ runId, platformId, account }: UnsavedFiles
             ))}
           </tbody>
         </table>
+        {items.isError && <Notice tone="fault">{errorMessage(items.error)}</Notice>}
+        <MoreRows query={items} />
       </div>
-      {hidden > 0 && <p className="help">{t("unsaved.more", { count: hidden })}</p>}
       <NewBackupPassphraseField onChange={setPassphrase} value={passphrase} />
       {unsaved.unavailable > 0 && (
         <div className="confirm">

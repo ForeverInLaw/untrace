@@ -693,7 +693,8 @@ pub fn run() {
             run_reads::list_receipts,
             run_reads::get_receipt,
             run_reads::list_interrupted_runs,
-            run_reads::list_unsaved_files,
+            run_reads::unsaved_files,
+            run_reads::unsaved_items,
             run_reads::list_accounts,
             run_reads::disconnect_account,
         ])

@@ -21,13 +21,14 @@ import {
   type StartRunRequest,
   type BackupRequest,
   type ExportOutcome,
+  type UnsavedCursor,
 } from "../lib/tauri";
 import { useSubtypesNamedBy } from "../lib/itemText";
 import { useExportStore } from "../stores/exportStore";
 import { selectRunLive, useRunStore } from "../stores/runStore";
 import { OWN_COUNTS_KEY, useSessionRefresh } from "./telegram";
 
-const PREVIEW_PAGE_SIZE = 100;
+const PAGE_SIZE = 100;
 const RECEIPT_POLL_MS = 500;
 
 export function useConnectAccountMutation() {
@@ -116,10 +117,10 @@ export function usePreviewItemsQuery(
         search,
         matchingSubtypes,
         offset: pageParam,
-        limit: PREVIEW_PAGE_SIZE,
+        limit: PAGE_SIZE,
       }),
     getNextPageParam: (lastPage, pages) =>
-      lastPage.length === PREVIEW_PAGE_SIZE ? pages.length * PREVIEW_PAGE_SIZE : undefined,
+      lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
   });
 }
 
@@ -192,7 +193,22 @@ export function useStartRunMutation(platformId: string) {
 }
 
 export function useUnsavedFilesQuery(runId: string) {
-  return useQuery({ queryKey: ["unsaved-files", runId], queryFn: () => api.listUnsavedFiles(runId) });
+  return useQuery({ queryKey: ["unsaved-files", runId], queryFn: () => api.unsavedFiles(runId) });
+}
+
+/// Each page starts past the last row shown, so rows a retry settles meanwhile
+/// leave none out.
+export function useUnsavedItemsQuery(runId: string) {
+  return useInfiniteQuery({
+    queryKey: ["unsaved-files", runId, "items"],
+    initialPageParam: null as UnsavedCursor | null,
+    queryFn: ({ pageParam }) => api.unsavedItems(runId, pageParam, PAGE_SIZE),
+    getNextPageParam: (lastPage): UnsavedCursor | undefined => {
+      // Only a full page may have more after it.
+      const last = lastPage[PAGE_SIZE - 1];
+      return last && { platform_id: last.platform_id, created_at_secs: last.created_at_secs };
+    },
+  });
 }
 
 interface RetryUnsavedFiles {
