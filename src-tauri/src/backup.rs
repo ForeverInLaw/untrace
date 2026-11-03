@@ -128,14 +128,20 @@ pub fn verify_backup(
 /// Empties the folders where a file waits, unencrypted, until the backup has it.
 /// Anything there on startup was left by a run that died first, and no run can be
 /// using it yet.
+/// Every folder is tried, so one that fails does not leave the others full; the
+/// first failure is returned.
 pub fn empty_download_dirs(dirs: &[PathBuf]) -> std::io::Result<()> {
+    let mut first_error = None;
     for dir in dirs {
-        match fs::remove_dir_all(dir) {
-            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
-            _ => fs::create_dir_all(dir)?,
+        let emptied = match fs::remove_dir_all(dir) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
+            _ => fs::create_dir_all(dir),
+        };
+        if let Err(error) = emptied {
+            first_error.get_or_insert(error);
         }
     }
-    Ok(())
+    first_error.map_or(Ok(()), Err)
 }
 
 /// Exports a backup into a new folder under the one `pick_folder` returns. The key
@@ -513,6 +519,21 @@ mod tests {
         empty_download_dirs(&[downloads.clone(), tdlib_files.clone()]).unwrap();
 
         assert_eq!(fs::read_dir(&downloads).unwrap().count(), 0);
+        assert_eq!(fs::read_dir(&tdlib_files).unwrap().count(), 0);
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_folder_that_cannot_be_emptied_does_not_spare_the_next_one() {
+        let dir = test_dir("downloads");
+        let not_a_folder = dir.join("downloads");
+        fs::write(&not_a_folder, b"").unwrap();
+        let tdlib_files = dir.join("files");
+        fs::create_dir_all(&tdlib_files).unwrap();
+        fs::write(tdlib_files.join("1.jpg"), b"plain").unwrap();
+
+        assert!(empty_download_dirs(&[not_a_folder, tdlib_files.clone()]).is_err());
         assert_eq!(fs::read_dir(&tdlib_files).unwrap().count(), 0);
 
         fs::remove_dir_all(dir).ok();
