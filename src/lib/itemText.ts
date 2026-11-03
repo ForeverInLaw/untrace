@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { ITEM_SUBTYPES, type ItemSubtype } from "./tauri";
+import { ITEM_SUBTYPES, isItemSubtype, type ItemSubtype } from "./tauri";
 
 interface Described {
-  subtype: ItemSubtype | null;
+  subtype: string | null;
   text: string | null;
 }
 
@@ -14,13 +14,13 @@ function fold(text: string) {
 /// Words a row the way Telegram does: what it is, then its own text ("Poll: tea or
 /// coffee"). Plain text shows as it is.
 export function useItemText() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   return ({ subtype, text }: Described) => {
     if (!subtype) {
       return text ?? t("preview.noText");
     }
     // A subtype newer than this interface reads as a service message.
-    const label = t(i18n.exists(`subtypes.${subtype}`) ? `subtypes.${subtype}` : "subtypes.service");
+    const label = t(`subtypes.${isItemSubtype(subtype) ? subtype : "service"}`);
     return text ? t("preview.subtypeWithText", { subtype: label, text }) : label;
   };
 }

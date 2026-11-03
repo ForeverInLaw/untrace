@@ -208,7 +208,8 @@ export interface InterruptedRun {
 
 export interface UnsavedItem {
   platform_id: string;
-  subtype: ItemSubtype | null;
+  /// One of `ITEM_SUBTYPES`, unless the engine is newer than this interface.
+  subtype: string | null;
   created_at_secs: number | null;
   text: string | null;
   failure: "unavailable" | "unreachable";
@@ -267,10 +268,15 @@ export const ITEM_SUBTYPES = [
 ] as const;
 export type ItemSubtype = (typeof ITEM_SUBTYPES)[number];
 
+export function isItemSubtype(subtype: string): subtype is ItemSubtype {
+  return (ITEM_SUBTYPES as readonly string[]).includes(subtype);
+}
+
 export interface PreviewItem {
   platform_id: string;
   content_type: ContentType;
-  subtype: ItemSubtype | null;
+  /// One of `ITEM_SUBTYPES`, unless the engine is newer than this interface.
+  subtype: string | null;
   created_at_secs: number | null;
   text: string | null;
   state: "pending" | "protected" | "undeletable";

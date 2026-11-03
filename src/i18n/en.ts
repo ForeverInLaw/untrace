@@ -155,7 +155,7 @@ export const en = {
   "subtypes.call": "Call",
   "subtypes.video_chat": "Video chat",
   "subtypes.chat_create": "You created the group",
-  "subtypes.chat_change_title": "You changed the chat name",
+  "subtypes.chat_change_title": "You changed the chat title",
   "subtypes.chat_change_photo": "You changed the chat photo",
   "subtypes.chat_delete_photo": "You removed the chat photo",
   "subtypes.chat_add_members": "You added members",
@@ -174,7 +174,7 @@ export const en = {
   "subtypes.gift": "Gift",
   "subtypes.giveaway": "Giveaway",
   "subtypes.payment": "Payment",
-  "subtypes.unsupported": "A message this version of Telegram can't read",
+  "subtypes.unsupported": "A message Untrace can't read yet",
   "subtypes.service": "Service message",
 
   "backup.mediaSize": "Media in the backup",

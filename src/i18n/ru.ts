@@ -180,7 +180,7 @@ export const ru = {
   "subtypes.gift": "Подарок",
   "subtypes.giveaway": "Розыгрыш",
   "subtypes.payment": "Платёж",
-  "subtypes.unsupported": "Сообщение, которое эта версия Telegram не читает",
+  "subtypes.unsupported": "Сообщение, которое Untrace пока не читает",
   "subtypes.service": "Служебное сообщение",
 
   "backup.mediaSize": "Медиа в копии",

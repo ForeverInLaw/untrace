@@ -28,12 +28,12 @@ const ALL: Filter = { group: "all", type: null };
 function ItemCells({ item, hint }: { item: PreviewItem; hint?: ReactNode }) {
   const { t } = useTranslation();
   const format = useDateFormat();
-  const text = useItemText()(item);
+  const itemText = useItemText();
   return (
     <>
-      <td title={text}>
+      <td title={itemText(item)}>
         <div className="cell-line">
-          <span className="cell-line__text">{text}</span>
+          <span className="cell-line__text">{itemText(item)}</span>
           {hint}
         </div>
       </td>
