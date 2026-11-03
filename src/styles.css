@@ -824,7 +824,7 @@ small {
   color: var(--ink);
 }
 
-/* Tables */
+/* Search */
 
 .search {
   position: relative;
@@ -845,6 +845,8 @@ small {
 .search__input {
   padding-left: 34px;
 }
+
+/* Tables */
 
 .chips {
   display: flex;

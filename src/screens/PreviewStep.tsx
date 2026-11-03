@@ -119,7 +119,7 @@ function ItemsTable({ runId, filter, search, undeletable }: ItemsTableProps) {
           )}
         </tbody>
       </table>
-      {items.isSuccess && rows.length === 0 && (
+      {items.isSuccess && !items.isPlaceholderData && rows.length === 0 && (
         <p className="empty">
           {search
             ? t("preview.notFound", { search })

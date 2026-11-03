@@ -2538,7 +2538,6 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
- "unicode-normalization",
  "uuid",
 ]
 
