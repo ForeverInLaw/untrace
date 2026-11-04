@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use lethe_adapter::PlatformAdapter;
 use lethe_telegram::tdlib_bridge::{
-    list_chat_scopes, search_own_messages, tally_own_messages, OwnMessagePage, TdlibClientId,
-    TelegramChatKind,
+    list_chat_scopes, own_senders_in, search_own_messages, tally_own_messages, OwnMessagePage,
+    OwnSenders, TdlibClientId, TelegramChatKind, TelegramChatScope,
 };
 use tauri::ipc::Channel;
 use tauri::State;
@@ -53,6 +53,8 @@ struct TelegramInner {
     client: Option<TdlibClientId>,
     account_label: Option<String>,
     current_user_id: Option<i64>,
+    /// Channels the account created, as of the last chat list.
+    own_channel_ids: Option<Vec<i64>>,
 }
 
 impl TelegramState {
@@ -242,6 +244,32 @@ impl TelegramState {
             .current_user_id
             .ok_or_else(|| CommandError::msg("Telegram user id is not loaded"))?;
         Ok((auth, client, current_user_id))
+    }
+
+    /// Who the account posts as. Its channels come from the last chat list, which is
+    /// loaded here when none has been yet.
+    pub(super) async fn own_senders(&self, client: TdlibClientId, user_id: i64) -> Result<OwnSenders, CommandError> {
+        let known = {
+            let inner = self.inner.lock().await;
+            // Channels noted under a newer sign-in belong to another account.
+            inner.own_channel_ids.clone().filter(|_| inner.client == Some(client))
+        };
+        let channel_ids = match known {
+            Some(ids) => ids,
+            None => self.remember_own_channels(client, &list_chat_scopes(client).await?).await,
+        };
+        Ok(OwnSenders { user_id, channel_ids })
+    }
+
+    /// Keeps which of the listed chats are channels the account created.
+    async fn remember_own_channels(&self, client: TdlibClientId, chats: &[TelegramChatScope]) -> Vec<i64> {
+        let ids: Vec<i64> = chats.iter().filter(|chat| chat.own_channel).map(|chat| chat.id).collect();
+        let mut inner = self.inner.lock().await;
+        // A sign-out meanwhile replaced the client, and these channels went with it.
+        if inner.client == Some(client) {
+            inner.own_channel_ids = Some(ids.clone());
+        }
+        ids
     }
 
     /// The signed-in account, once the saved session has had its chance to reconnect.
@@ -436,11 +464,9 @@ pub async fn telegram_scope_status(
         });
     };
 
-    let chats = list_chat_scopes(client)
-        .await?
-        .into_iter()
-        .map(TelegramChatSummary::from)
-        .collect();
+    let scopes = list_chat_scopes(client).await?;
+    state.remember_own_channels(client, &scopes).await;
+    let chats = scopes.into_iter().map(TelegramChatSummary::from).collect();
 
     Ok(TelegramScopeStatus {
         available: true,
@@ -542,11 +568,13 @@ where
 async fn own_message_page(
     client: TdlibClientId,
     chat_id: i64,
+    sender: &enums::MessageSender,
     current_user_id: i64,
     from_message_id: i64,
     limit: i32,
 ) -> Result<OwnMessagePage, lethe_adapter::AdapterError> {
-    sitting_out_flood_waits(|| search_own_messages(client, chat_id, current_user_id, from_message_id, limit)).await
+    sitting_out_flood_waits(|| search_own_messages(client, chat_id, sender, current_user_id, from_message_id, limit))
+        .await
 }
 
 /// One search page this long counts most chats exactly.
@@ -560,10 +588,14 @@ pub async fn telegram_own_message_count(
     chat_id: String,
 ) -> Result<OwnMessageCount, CommandError> {
     let (_auth, client, current_user_id) = state.ready_context().await?;
+    let own = state.own_senders(client, current_user_id).await?;
     let chat_id = parse_chat_id(&chat_id)?;
-    let tally =
-        sitting_out_flood_waits(|| tally_own_messages(client, chat_id, current_user_id, OWN_COUNT_PAGE)).await?;
-    Ok(OwnMessageCount::from_first_page(tally.found, tally.total_count, OWN_COUNT_PAGE))
+    let mut counts = Vec::new();
+    for sender in own_senders_in(client, chat_id, &own).await? {
+        let tally = sitting_out_flood_waits(|| tally_own_messages(client, chat_id, &sender, OWN_COUNT_PAGE)).await?;
+        counts.push(OwnMessageCount::from_first_page(tally.found, tally.total_count, OWN_COUNT_PAGE));
+    }
+    Ok(counts.into_iter().sum())
 }
 
 #[tauri::command]

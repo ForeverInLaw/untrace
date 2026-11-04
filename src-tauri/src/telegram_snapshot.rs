@@ -12,8 +12,8 @@ use lethe_core::pipeline::{self, RunRequest};
 use lethe_core::{ProgressEvent, RunControl};
 use lethe_store::NewRun;
 use lethe_telegram::tdlib_bridge::{
-    delete_downloaded_file, delete_message_batch, download_message_file, read_delete_rights,
-    TdlibClientId, TelegramMessageKind,
+    delete_downloaded_file, delete_message_batch, download_message_file, own_senders_in,
+    read_delete_rights, OwnSenders, TdlibClientId, TelegramMessageKind,
 };
 use lethe_telegram::{message_token, parse_message_ref, DeletePlan};
 use tauri::State;
@@ -67,7 +67,8 @@ pub async fn telegram_dry_run_chats(
         .collect::<Result<Vec<_>, _>>()?;
     let filter = run_filters::to_filter_spec(&req.filter)?;
     let filter_json = serde_json::to_string(&req.filter)?;
-    let adapter = snapshot_items_for_chats(client, current_user_id, &chat_ids, state.connection()).await?;
+    let own = state.own_senders(client, current_user_id).await?;
+    let adapter = snapshot_items_for_chats(client, &own, &chat_ids, state.connection()).await?;
     let run_id = new_run_id("telegram");
 
     let run_req = RunRequest {
@@ -236,53 +237,56 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
 
 pub async fn snapshot_items_for_chats(
     client: TdlibClientId,
-    current_user_id: i64,
+    own: &OwnSenders,
     chat_ids: &[i64],
     connection: watch::Receiver<bool>,
 ) -> Result<Arc<dyn PlatformAdapter>, AdapterError> {
     let mut items = Vec::new();
     for chat_id in chat_ids {
-        let mut from_message_id = 0;
-        loop {
-            let page = own_message_page(
-                client,
-                *chat_id,
-                current_user_id,
-                from_message_id,
-                SEARCH_PAGE,
-            )
-            .await?;
-            items.extend(page.messages.into_iter().map(|message| {
-                Item {
-                    content_type: match message.kind {
-                        TelegramMessageKind::Media => ContentType::Media,
-                        TelegramMessageKind::Text | TelegramMessageKind::Other => ContentType::Dm,
-                    },
-                    subtype: message.subtype,
-                    created_at: time::OffsetDateTime::from_unix_timestamp(
-                        message.sent_at_epoch_secs as i64,
-                    )
-                    .ok(),
-                    text: message.text.clone(),
-                    engagement: Default::default(),
-                    scope_id: Some(message.chat_id.to_string()),
-                    media: message.media.clone(),
-                    platform_record: Some(message.platform_record),
-                    backup_gap: message.backup_gap,
-                    delete_reach: message.delete_reach,
-                    item_ref: ItemRef {
-                        platform_id: format!("telegram:{}:{}", message.chat_id, message.message_id),
-                        token: Some(message_token(message.chat_id, message.message_id, message.delete_reach)),
-                    },
+        for sender in own_senders_in(client, *chat_id, own).await? {
+            let mut from_message_id = 0;
+            loop {
+                let page = own_message_page(
+                    client,
+                    *chat_id,
+                    &sender,
+                    own.user_id,
+                    from_message_id,
+                    SEARCH_PAGE,
+                )
+                .await?;
+                items.extend(page.messages.into_iter().map(|message| {
+                    Item {
+                        content_type: match message.kind {
+                            TelegramMessageKind::Media => ContentType::Media,
+                            TelegramMessageKind::Text | TelegramMessageKind::Other => ContentType::Dm,
+                        },
+                        subtype: message.subtype,
+                        created_at: time::OffsetDateTime::from_unix_timestamp(
+                            message.sent_at_epoch_secs as i64,
+                        )
+                        .ok(),
+                        text: message.text.clone(),
+                        engagement: Default::default(),
+                        scope_id: Some(message.chat_id.to_string()),
+                        media: message.media.clone(),
+                        platform_record: Some(message.platform_record),
+                        backup_gap: message.backup_gap,
+                        delete_reach: message.delete_reach,
+                        item_ref: ItemRef {
+                            platform_id: format!("telegram:{}:{}", message.chat_id, message.message_id),
+                            token: Some(message_token(message.chat_id, message.message_id, message.delete_reach)),
+                        },
+                    }
+                }));
+                if page.next_from_message_id == 0 {
+                    break;
                 }
-            }));
-            if page.next_from_message_id == 0 {
-                break;
+                from_message_id = page.next_from_message_id;
             }
-            from_message_id = page.next_from_message_id;
         }
     }
-    Ok(Arc::new(TelegramSnapshotAdapter::new(items, client, current_user_id, connection)))
+    Ok(Arc::new(TelegramSnapshotAdapter::new(items, client, own.user_id, connection)))
 }
 
 #[cfg(test)]
