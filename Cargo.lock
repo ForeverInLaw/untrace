@@ -5478,6 +5478,7 @@ checksum = "eb066959b24b5196ae73cb057f45598450d2c5f71460e98c49b738086eff9c06"
 name = "untrace"
 version = "0.0.0"
 dependencies = [
+ "async-stream",
  "async-trait",
  "fs4",
  "futures",
