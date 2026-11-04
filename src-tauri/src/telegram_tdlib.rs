@@ -249,7 +249,11 @@ impl TelegramState {
     /// Who the account posts as. Its channels come from the last chat list, which is
     /// loaded here when none has been yet.
     pub(super) async fn own_senders(&self, client: TdlibClientId, user_id: i64) -> Result<OwnSenders, CommandError> {
-        let known = self.inner.lock().await.own_channel_ids.clone();
+        let known = {
+            let inner = self.inner.lock().await;
+            // Channels noted under a newer sign-in belong to another account.
+            inner.own_channel_ids.clone().filter(|_| inner.client == Some(client))
+        };
         let channel_ids = match known {
             Some(ids) => ids,
             None => self.remember_own_channels(client, &list_chat_scopes(client).await?).await,
