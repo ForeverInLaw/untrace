@@ -767,6 +767,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_interface_knows_every_subtype_the_engine_sends() {
+        let source = include_str!("../../src/lib/tauri.ts");
+        let start = source.find("export const ITEM_SUBTYPES = [").unwrap();
+        let list = &source[start..start + source[start..].find("] as const").unwrap()];
+        let mut interface: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
+        let mut engine = lethe_adapter::ITEM_SUBTYPES.to_vec();
+        interface.sort_unstable();
+        engine.sort_unstable();
+
+        assert_eq!(interface, engine, "ITEM_SUBTYPES in src/lib/tauri.ts differs from the engine's");
+    }
+
+    #[test]
     fn runs_opened_in_the_same_second_get_ids_of_their_own() {
         let (first, second) = (new_run_id("retry"), new_run_id("retry"));
 

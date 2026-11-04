@@ -219,6 +219,8 @@ export interface UnsavedItem {
   subtype: string | null;
   created_at_secs: number | null;
   text: string | null;
+  /// The name of its first named file.
+  file_name: string | null;
   failure: "unavailable" | "unreachable";
 }
 
@@ -265,7 +267,8 @@ export interface PreviewSummary extends PreviewCounts {
   undeletable: number;
 }
 
-/// What an item is when its content type is too coarse, as the engine names it.
+/// What an item is when its content type is too coarse, as the engine names it. A
+/// test in `src-tauri/src/lib.rs` keeps it equal to lethe's `ITEM_SUBTYPES`.
 export const ITEM_SUBTYPES = [
   "animation", "audio", "document", "paid_media", "photo", "sticker", "video", "video_note",
   "voice_note", "expired_media", "location", "venue", "contact", "dice", "game", "poll", "story",
