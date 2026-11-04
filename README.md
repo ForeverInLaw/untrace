@@ -26,6 +26,12 @@ npm run build
 cargo test --workspace
 ```
 
+On Windows, set up OpenSSL as [Lethe's README](https://github.com/ForeverInLaw/lethe#windows)
+describes before building. A build with Telegram
+(`npm run tauri dev -- --features telegram-tdlib-download`) also needs `tdjson.dll` on
+`PATH`: the build downloads it into a `tdlib-rs-*` folder under `target\debug\build`, so add
+that folder or copy the DLL next to the app.
+
 External contributions are not accepted yet: a CLA comes first.
 
 License: AGPL-3.0-only.
