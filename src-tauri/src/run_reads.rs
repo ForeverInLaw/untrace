@@ -320,6 +320,8 @@ pub struct UnsavedItem {
     subtype: Option<String>,
     created_at_secs: Option<i64>,
     text: Option<String>,
+    /// The name of its first named file.
+    file_name: Option<String>,
     /// `unavailable`: the platform refused the file. `unreachable`: anything else.
     failure: &'static str,
 }
@@ -349,6 +351,7 @@ pub async fn unsaved_items(
             subtype: item.subtype,
             created_at_secs: item.created_at_secs,
             text: item.text,
+            file_name: item.file_name,
             failure: item.failure.as_str(),
         })
         .collect())
