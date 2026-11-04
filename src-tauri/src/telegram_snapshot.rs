@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::{stream, StreamExt};
+use futures::StreamExt;
 use lethe_adapter::{
     AdapterError, Capabilities, ContentType, Descriptor, FetchedMedia, Item, ItemRef, ItemStream,
     MediaRef, Outcome, PlatformAdapter, PushdownDim, RatePolicy, RiskClass,
@@ -13,7 +13,7 @@ use lethe_core::{ProgressEvent, RunControl};
 use lethe_store::NewRun;
 use lethe_telegram::tdlib_bridge::{
     delete_downloaded_file, delete_message_batch, download_message_file, own_senders_in,
-    read_delete_rights, OwnSenders, TdlibClientId, TelegramMessageKind,
+    read_delete_rights, OwnSenders, TdlibClientId, TelegramMessageKind, TelegramMessageRef,
 };
 use lethe_telegram::{message_token, parse_message_ref, DeletePlan};
 use tauri::State;
@@ -68,7 +68,8 @@ pub async fn telegram_dry_run_chats(
     let filter = run_filters::to_filter_spec(&req.filter)?;
     let filter_json = serde_json::to_string(&req.filter)?;
     let own = state.own_senders(client, current_user_id).await?;
-    let adapter = snapshot_items_for_chats(client, &own, &chat_ids, state.connection()).await?;
+    let adapter: Arc<dyn PlatformAdapter> =
+        Arc::new(TelegramSnapshotAdapter::for_preview(client, own, chat_ids, state.connection()));
     let run_id = new_run_id("telegram");
 
     let run_req = RunRequest {
@@ -119,9 +120,10 @@ pub async fn telegram_dry_run_chats(
 
 pub struct TelegramSnapshotAdapter {
     descriptor: Descriptor,
-    items: Vec<Item>,
+    /// The chats a preview reads, page by page as the pipeline takes them.
+    chat_ids: Vec<i64>,
     client: TdlibClientId,
-    current_user_id: i64,
+    own: OwnSenders,
     /// Whether TDLib is connected to Telegram.
     connection: watch::Receiver<bool>,
     /// The run this adapter downloads for; a stop calls off the download in progress.
@@ -130,29 +132,30 @@ pub struct TelegramSnapshotAdapter {
 
 impl TelegramSnapshotAdapter {
     /// Execute-phase adapter: Phase 2 reads pending rows from the store, so it
-    /// only needs delete + rate_policy. ponytail: empty item set is correct —
-    /// enumerate is never called during execute.
+    /// reads no chats; enumerate is never called during execute.
     pub fn for_execute(
         client: TdlibClientId,
         current_user_id: i64,
         connection: watch::Receiver<bool>,
         run: RunControl,
     ) -> Self {
+        let own = OwnSenders { user_id: current_user_id, channel_ids: Vec::new() };
         Self {
             run,
-            ..Self::new(Vec::new(), client, current_user_id, connection)
+            ..Self::for_preview(client, own, Vec::new(), connection)
         }
     }
 
-    pub fn new(
-        items: Vec<Item>,
+    /// Preview adapter over the account's messages in `chat_ids`.
+    pub fn for_preview(
         client: TdlibClientId,
-        current_user_id: i64,
+        own: OwnSenders,
+        chat_ids: Vec<i64>,
         connection: watch::Receiver<bool>,
     ) -> Self {
         Self {
             client,
-            current_user_id,
+            own,
             connection,
             run: RunControl::new(),
             descriptor: Descriptor {
@@ -168,7 +171,7 @@ impl TelegramSnapshotAdapter {
                 },
                 endpoints: Vec::new(),
             },
-            items,
+            chat_ids,
         }
     }
 }
@@ -183,8 +186,27 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
         &self,
         _plan: &lethe_adapter::EnumeratePlan,
     ) -> Result<ItemStream, AdapterError> {
-        let items = self.items.clone().into_iter().map(Ok);
-        Ok(stream::iter(items).boxed())
+        let (client, own, chat_ids) = (self.client, self.own.clone(), self.chat_ids.clone());
+        // One search page at a time, so a long chat never sits in memory whole.
+        let items = async_stream::try_stream! {
+            for chat_id in chat_ids {
+                for sender in own_senders_in(client, chat_id, &own).await? {
+                    let mut from_message_id = 0;
+                    loop {
+                        let page =
+                            own_message_page(client, chat_id, &sender, own.user_id, from_message_id, SEARCH_PAGE).await?;
+                        for message in page.messages {
+                            yield preview_item(message);
+                        }
+                        if page.next_from_message_id == 0 {
+                            break;
+                        }
+                        from_message_id = page.next_from_message_id;
+                    }
+                }
+            }
+        };
+        Ok(items.boxed())
     }
 
     async fn delete(&self, items: &[ItemRef]) -> Vec<Outcome> {
@@ -196,7 +218,7 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
             };
             checked.push((item, rights));
         }
-        let plan = DeletePlan::new(checked, self.current_user_id);
+        let plan = DeletePlan::new(checked, self.own.user_id);
 
         let mut results = HashMap::new();
         for (call, message_ids) in &plan.calls {
@@ -235,58 +257,27 @@ impl PlatformAdapter for TelegramSnapshotAdapter {
     }
 }
 
-pub async fn snapshot_items_for_chats(
-    client: TdlibClientId,
-    own: &OwnSenders,
-    chat_ids: &[i64],
-    connection: watch::Receiver<bool>,
-) -> Result<Arc<dyn PlatformAdapter>, AdapterError> {
-    let mut items = Vec::new();
-    for chat_id in chat_ids {
-        for sender in own_senders_in(client, *chat_id, own).await? {
-            let mut from_message_id = 0;
-            loop {
-                let page = own_message_page(
-                    client,
-                    *chat_id,
-                    &sender,
-                    own.user_id,
-                    from_message_id,
-                    SEARCH_PAGE,
-                )
-                .await?;
-                items.extend(page.messages.into_iter().map(|message| {
-                    Item {
-                        content_type: match message.kind {
-                            TelegramMessageKind::Media => ContentType::Media,
-                            TelegramMessageKind::Text | TelegramMessageKind::Other => ContentType::Dm,
-                        },
-                        subtype: message.subtype,
-                        created_at: time::OffsetDateTime::from_unix_timestamp(
-                            message.sent_at_epoch_secs as i64,
-                        )
-                        .ok(),
-                        text: message.text.clone(),
-                        engagement: Default::default(),
-                        scope_id: Some(message.chat_id.to_string()),
-                        media: message.media.clone(),
-                        platform_record: Some(message.platform_record),
-                        backup_gap: message.backup_gap,
-                        delete_reach: message.delete_reach,
-                        item_ref: ItemRef {
-                            platform_id: format!("telegram:{}:{}", message.chat_id, message.message_id),
-                            token: Some(message_token(message.chat_id, message.message_id, message.delete_reach)),
-                        },
-                    }
-                }));
-                if page.next_from_message_id == 0 {
-                    break;
-                }
-                from_message_id = page.next_from_message_id;
-            }
-        }
+/// A found message as the preview stores it.
+fn preview_item(message: TelegramMessageRef) -> Item {
+    Item {
+        content_type: match message.kind {
+            TelegramMessageKind::Media => ContentType::Media,
+            TelegramMessageKind::Text | TelegramMessageKind::Other => ContentType::Dm,
+        },
+        subtype: message.subtype,
+        created_at: time::OffsetDateTime::from_unix_timestamp(message.sent_at_epoch_secs as i64).ok(),
+        text: message.text,
+        engagement: Default::default(),
+        scope_id: Some(message.chat_id.to_string()),
+        media: message.media,
+        platform_record: Some(message.platform_record),
+        backup_gap: message.backup_gap,
+        delete_reach: message.delete_reach,
+        item_ref: ItemRef {
+            platform_id: format!("telegram:{}:{}", message.chat_id, message.message_id),
+            token: Some(message_token(message.chat_id, message.message_id, message.delete_reach)),
+        },
     }
-    Ok(Arc::new(TelegramSnapshotAdapter::new(items, client, own.user_id, connection)))
 }
 
 #[cfg(test)]
