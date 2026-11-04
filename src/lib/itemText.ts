@@ -5,7 +5,7 @@ interface Described {
   subtype: string | null;
   text: string | null;
   /// Stands in for missing text, as Telegram's chat list does.
-  file_name?: string | null;
+  file_name: string | null;
 }
 
 /// Close enough to the store's search folding for the short subtype labels.
